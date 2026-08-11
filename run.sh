@@ -6,6 +6,14 @@ cd "$(dirname "$0")"
 
 VENV_DIR=".venv"
 
+# Preferred path: uv resolves and installs from uv.lock, then runs. It creates
+# .venv itself on first run, so nothing else here needs to happen.
+if command -v uv >/dev/null 2>&1; then
+  exec uv run python app.py
+fi
+
+# Fallback for machines without uv: plain venv + pip, installing the pinned set
+# exported from uv.lock into requirements.txt.
 if ! command -v python3 >/dev/null 2>&1; then
   echo "Python 3 was not found. Install Python 3.9 or newer."
   exit 1

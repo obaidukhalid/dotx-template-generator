@@ -1,0 +1,17 @@
+[project]
+name = "dotx-template-generator"
+version = "0.1.0"
+description = "Local web GUI that turns styling settings into a real Word (.dotx) template"
+readme = "README.md"
+requires-python = ">=3.9"
+dependencies = [
+    "Flask>=3.0",
+    "python-docx>=1.1",
+]
+
+[tool.uv]
+# Template Studio is an application that runs from its own folder, not an
+# installable library. app.py resolves templates/, config.json and presets.json
+# relative to its own path, so it must stay in place rather than be copied into
+# site-packages.
+package = false

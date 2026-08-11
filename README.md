@@ -12,8 +12,9 @@ disk and you can open the containing folder from the same screen.
 
 ### Windows
 
-Double click `run.bat`. It checks for Python, installs the two dependencies on
-first run, starts the server and opens your browser.
+Double click `run.bat`. If uv is installed it uses that; otherwise it falls back
+to Python and pip. Either way it installs the dependencies on first run, starts
+the server and opens your browser.
 
 ### macOS and Linux
 
@@ -21,20 +22,50 @@ first run, starts the server and opens your browser.
 ./run.sh
 ```
 
-On first run it creates a virtual environment in `.venv` inside the project
-folder, installs the dependencies there and starts the server. Nothing is
-installed into your system Python. Later runs reuse the same environment and
-start immediately.
+If uv is installed it hands off to `uv run`; otherwise it falls back to venv and
+pip. On first run either path creates a virtual environment in `.venv` inside
+the project folder, installs the dependencies there and starts the server.
+Nothing is installed into your system Python. Later runs reuse the same
+environment and start immediately.
 
 Delete the `.venv` folder to force a clean reinstall.
 
 ### Manual
+
+Two options. Both end up in the same place — a `.venv` in the project folder
+with the same pinned dependencies.
+
+**With uv (recommended)**
+
+```bash
+uv run python app.py
+```
+
+That is the whole thing. `uv run` reads `pyproject.toml`, installs the exact
+versions recorded in `uv.lock` into `.venv`, creating it if it does not exist,
+and then starts the server. There is no separate install step and no
+environment to activate. If you do not have uv, see
+[the install instructions](https://docs.astral.sh/uv/getting-started/installation/).
+
+To set the environment up without starting the server, use `uv sync`.
+
+**With plain Python**
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 python app.py
+```
+
+On Windows the activate line is `.venv\Scripts\activate` instead.
+
+`requirements.txt` is generated from `uv.lock`, so it holds the same pinned
+versions. Dependencies are declared in `pyproject.toml` — that is the file to
+edit when adding one. Regenerate the export afterwards with:
+
+```bash
+uv export --format requirements-txt --no-hashes --no-dev --no-emit-project -o requirements.txt
 ```
 
 The browser opens at `http://127.0.0.1:5000`. Nothing leaves your machine and
@@ -174,10 +205,12 @@ dotx_studio/
 ├── presets.json           Named style sets shown in the preset dropdown
 ├── templates/
 │   └── index.html         The GUI, one file, no build step
-├── requirements.txt
+├── pyproject.toml         Project metadata and dependency declarations
+├── uv.lock                Exact resolved versions, committed for reproducibility
+├── requirements.txt       Generated from uv.lock for the non-uv path
 ├── run.bat                Windows launcher
 ├── run.sh                 macOS and Linux launcher, sets up .venv
-└── .venv/                 Created on first run by run.sh, safe to delete
+└── .venv/                 Created on first run, safe to delete
 ```
 
 ---
