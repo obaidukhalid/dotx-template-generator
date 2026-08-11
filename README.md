@@ -285,6 +285,32 @@ build_template(config, "output/Report_Template.dotx")
 - Fonts must be installed on the machine where the document is opened. Sticking
   to fonts that ship with Office avoids substitution.
 
+### Why the server is fussy about who is calling
+
+The server listens on loopback only, but that on its own guards nothing: any
+page open in the same browser can send requests to `127.0.0.1`, and a hostile
+DNS record can point a domain at loopback so the attacker's scripts read the
+replies too. Three checks close that off, and they are worth knowing about if
+you ever call the API yourself.
+
+- Every request that changes something must carry an `X-CSRF-Token` header. The
+  token is generated per run and handed only to the real page, so another site
+  cannot read it. The GUI attaches it automatically.
+- The `Host` header has to match the address the app is served on. This is what
+  stops DNS rebinding, since the browser sends the attacker's hostname there.
+- Bodies are parsed as strict JSON. A plain form POST — the one request shape
+  that crosses origins without a preflight — is refused before it reaches a
+  handler, so `Content-Type: application/json` is required.
+
+Two consequences for the file endpoints. `/api/file` only serves templates that
+this run of the app generated, never an arbitrary path, so it cannot be turned
+into a way to read your disk. `/api/open-folder` likewise only opens folders the
+app has written to, or the default output folder.
+
+None of this authenticates *local* programs — anything already running as you
+can read the page and take the token. It is a defence against other websites,
+not against software you have already installed.
+
 ---
 
 ## Troubleshooting
@@ -296,7 +322,8 @@ can always type the path into the box instead.
 
 **Port 5000 is already in use.**
 On macOS this is usually AirPlay Receiver. Turn it off in System Settings, or
-change the port on the last line of `app.py`.
+change the `PORT` constant near the top of `app.py`. The server checks incoming
+requests against that value, so changing it in one place is enough.
 
 **Colours look wrong in Word.**
 Check the hex value is six characters with no `#`. The colour swatch keeps this
