@@ -1,0 +1,583 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Template Studio</title>
+<style>
+  :root {
+    --dark: #1e293b;
+    --dark2: #2d3f55;
+    --dark3: #3a506b;
+    --cream: #f5f2ee;
+    --green: #006600;
+    --green-hover: #005200;
+    --green-text: #7ec87e;
+    --green-light: #e6f2eb;
+    --green-mid: #c8ddd0;
+    --warm-gray: #e8e4df;
+    --muted: #6b7280;
+    --border: #e2ddd6;
+    --white: #ffffff;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--cream);
+    color: var(--dark);
+    font-size: 14px;
+  }
+
+  header {
+    background: var(--dark);
+    color: var(--white);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  header .tag {
+    font-size: 12px; color: var(--green-text); border: 1px solid var(--green-text);
+    padding: 2px 8px; border-radius: 10px;
+  }
+  header .spacer { flex: 1; }
+  header select {
+    background: var(--dark2); color: var(--white); border: 1px solid var(--dark3);
+    padding: 6px 10px; border-radius: 6px; font-size: 13px;
+  }
+
+  .layout {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr) 340px;
+    gap: 20px;
+    padding: 20px 24px 140px;
+    align-items: start;
+  }
+
+  nav {
+    position: sticky; top: 70px;
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px; overflow: hidden;
+  }
+  nav a {
+    display: block; padding: 7px 10px; border-radius: 5px;
+    color: var(--dark); text-decoration: none; font-size: 13px;
+  }
+  nav a:hover { background: var(--green-light); }
+  nav a.active { background: var(--green); color: var(--white); }
+
+  section.card {
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: 8px; margin-bottom: 16px; overflow: hidden;
+    scroll-margin-top: 76px;
+  }
+  section.card > h2 {
+    margin: 0; padding: 12px 16px; font-size: 14px; font-weight: 600;
+    background: var(--warm-gray); border-bottom: 1px solid var(--border);
+  }
+  section.card .hint {
+    padding: 10px 16px 0; font-size: 12px; color: var(--muted); margin: 0;
+  }
+
+  .grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+    gap: 12px 16px; padding: 14px 16px 18px;
+  }
+
+  .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+  .field label { font-size: 12px; font-weight: 600; color: var(--dark3); }
+  .field .help { font-size: 11px; color: var(--muted); }
+
+  input[type=text], input[type=number], select {
+    width: 100%; padding: 7px 9px; border: 1px solid var(--border);
+    border-radius: 5px; font-size: 13px; background: var(--white);
+    color: var(--dark); font-family: inherit;
+  }
+  input:focus, select:focus {
+    outline: none; border-color: var(--green); box-shadow: 0 0 0 2px var(--green-light);
+  }
+
+  .num-wrap { position: relative; }
+  .num-wrap .unit {
+    position: absolute; right: 9px; top: 50%; transform: translateY(-50%);
+    font-size: 11px; color: var(--muted); pointer-events: none;
+  }
+  .num-wrap input { padding-right: 46px; }
+
+  .color-wrap { display: flex; gap: 6px; align-items: center; }
+  .color-wrap input[type=color] {
+    width: 34px; height: 32px; padding: 2px; border: 1px solid var(--border);
+    border-radius: 5px; background: var(--white); cursor: pointer; flex: none;
+  }
+  .color-wrap input[type=text] { text-transform: uppercase; font-family: ui-monospace, Consolas, monospace; }
+
+  .switch { display: flex; align-items: center; gap: 8px; padding-top: 3px; }
+  .switch input { appearance: none; width: 36px; height: 20px; border-radius: 10px;
+    background: var(--warm-gray); position: relative; cursor: pointer;
+    transition: background .15s; flex: none; border: 1px solid var(--border); }
+  .switch input:checked { background: var(--green); border-color: var(--green); }
+  .switch input::after {
+    content: ""; position: absolute; width: 14px; height: 14px; border-radius: 50%;
+    background: var(--white); top: 2px; left: 3px; transition: left .15s;
+  }
+  .switch input:checked::after { left: 18px; }
+  .switch span { font-size: 12.5px; }
+
+  aside.preview {
+    position: sticky; top: 70px;
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: 8px; overflow: hidden;
+  }
+  aside.preview h3 {
+    margin: 0; padding: 10px 14px; font-size: 13px; font-weight: 600;
+    background: var(--warm-gray); border-bottom: 1px solid var(--border);
+  }
+  .page {
+    padding: 18px 16px; max-height: calc(100vh - 220px); overflow-y: auto;
+    background: var(--white);
+  }
+  .page p, .page div { margin: 0; }
+  .page .pv-bullet { display: flex; gap: 8px; }
+  .page .pv-bullet .mark { flex: none; }
+
+  .actionbar {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 50;
+    background: var(--dark); color: var(--white);
+    padding: 12px 24px; display: flex; gap: 10px; align-items: flex-end;
+    flex-wrap: wrap; border-top: 3px solid var(--green);
+  }
+  .actionbar .f { display: flex; flex-direction: column; gap: 4px; }
+  .actionbar label { font-size: 11px; color: var(--green-text); font-weight: 600; }
+  .actionbar input {
+    background: var(--dark2); border: 1px solid var(--dark3); color: var(--white);
+    padding: 7px 9px; border-radius: 5px; font-size: 13px;
+  }
+  .actionbar .grow { flex: 1; min-width: 220px; }
+  .actionbar .grow input { width: 100%; }
+
+  button {
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    padding: 8px 14px; border-radius: 6px; cursor: pointer; border: 1px solid transparent;
+    white-space: nowrap;
+  }
+  button.primary { background: var(--green); color: var(--white); }
+  button.primary:hover { background: var(--green-hover); }
+  button.ghost { background: transparent; color: var(--white); border-color: var(--dark3); }
+  button.ghost:hover { background: var(--dark2); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  #status {
+    width: 100%; font-size: 12.5px; padding: 2px 0 0; min-height: 17px;
+  }
+  #status .ok { color: var(--green-text); }
+  #status .err { color: #ff9d9d; }
+  #status code {
+    font-family: ui-monospace, Consolas, monospace; background: var(--dark2);
+    padding: 1px 5px; border-radius: 3px;
+  }
+
+  @media (max-width: 1180px) {
+    .layout { grid-template-columns: 1fr; }
+    nav, aside.preview { position: static; }
+  }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Template Studio</h1>
+  <span class="tag">.dotx generator</span>
+  <div class="spacer"></div>
+  <select id="preset">
+    <option value="">Apply a preset…</option>
+  </select>
+  <button class="ghost" id="btn-reset" style="border-color:#3a506b">Reload saved config</button>
+</header>
+
+<div class="layout">
+  <nav id="nav"></nav>
+  <main id="form"></main>
+  <aside class="preview">
+    <h3>Live preview</h3>
+    <div class="page" id="preview"></div>
+  </aside>
+</div>
+
+<div class="actionbar">
+  <div class="f grow">
+    <label for="outdir">Save folder</label>
+    <input type="text" id="outdir" placeholder="Choose a folder">
+  </div>
+  <div class="f">
+    <label for="filename">File name</label>
+    <input type="text" id="filename" value="Document_Template.dotx" style="width:230px">
+  </div>
+  <button class="ghost" id="btn-browse">Browse…</button>
+  <button class="primary" id="btn-generate">Generate template</button>
+  <button class="ghost" id="btn-open" disabled>Open folder</button>
+  <button class="ghost" id="btn-download" disabled>Download</button>
+  <div id="status"></div>
+</div>
+
+<script>
+let SCHEMA = [], CONFIG = {}, PRESETS = {}, LAST_PATH = null;
+
+// ---------- path helpers ----------
+const getPath = (obj, path) =>
+  path.split('.').reduce((acc, key) => (acc == null ? undefined : acc[key]), obj);
+
+function setPath(obj, path, value) {
+  const keys = path.split('.');
+  let cur = obj;
+  keys.slice(0, -1).forEach(k => {
+    if (typeof cur[k] !== 'object' || cur[k] === null) cur[k] = {};
+    cur = cur[k];
+  });
+  cur[keys[keys.length - 1]] = value;
+}
+
+const normHex = v => {
+  v = String(v || '').trim().replace(/^#/, '').toUpperCase();
+  return /^[0-9A-F]{6}$/.test(v) ? v : null;
+};
+
+// ---------- form building ----------
+function buildField(field) {
+  const wrap = document.createElement('div');
+  wrap.className = 'field';
+
+  const label = document.createElement('label');
+  label.textContent = field.label;
+  wrap.appendChild(label);
+
+  const value = getPath(CONFIG, field.path);
+
+  if (field.type === 'bool') {
+    const row = document.createElement('div');
+    row.className = 'switch';
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.checked = !!value;
+    input.onchange = () => { setPath(CONFIG, field.path, input.checked); refreshPreview(); };
+    const text = document.createElement('span');
+    text.textContent = input.checked ? 'On' : 'Off';
+    input.addEventListener('change', () => text.textContent = input.checked ? 'On' : 'Off');
+    row.appendChild(input); row.appendChild(text);
+    wrap.appendChild(row);
+
+  } else if (field.type === 'select') {
+    const select = document.createElement('select');
+    field.options.forEach(opt => {
+      const [val, text] = Array.isArray(opt) ? opt : [opt, opt];
+      const option = document.createElement('option');
+      option.value = val; option.textContent = text;
+      if (String(val) === String(value)) option.selected = true;
+      select.appendChild(option);
+    });
+    select.onchange = () => { setPath(CONFIG, field.path, select.value); refreshPreview(); };
+    wrap.appendChild(select);
+
+  } else if (field.type === 'number') {
+    const box = document.createElement('div');
+    box.className = 'num-wrap';
+    const input = document.createElement('input');
+    input.type = 'number';
+    if (field.min !== undefined) input.min = field.min;
+    if (field.max !== undefined) input.max = field.max;
+    if (field.step !== undefined) input.step = field.step;
+    input.value = value ?? 0;
+    input.oninput = () => {
+      const num = parseFloat(input.value);
+      setPath(CONFIG, field.path, isNaN(num) ? 0 : num);
+      refreshPreview();
+    };
+    box.appendChild(input);
+    if (field.unit) {
+      const unit = document.createElement('span');
+      unit.className = 'unit'; unit.textContent = field.unit;
+      box.appendChild(unit);
+    }
+    wrap.appendChild(box);
+
+  } else if (field.type === 'color') {
+    const row = document.createElement('div');
+    row.className = 'color-wrap';
+    const swatch = document.createElement('input');
+    swatch.type = 'color';
+    swatch.value = '#' + (normHex(value) || '000000');
+    const hex = document.createElement('input');
+    hex.type = 'text';
+    hex.value = value || '';
+    hex.placeholder = field.allow_empty ? 'inherit' : '000000';
+    hex.maxLength = 7;
+
+    swatch.oninput = () => {
+      const v = swatch.value.replace('#', '').toUpperCase();
+      hex.value = v; setPath(CONFIG, field.path, v); refreshPreview();
+    };
+    hex.oninput = () => {
+      const v = normHex(hex.value);
+      if (v) { swatch.value = '#' + v; setPath(CONFIG, field.path, v); }
+      else if (hex.value.trim() === '' && field.allow_empty) setPath(CONFIG, field.path, '');
+      refreshPreview();
+    };
+    row.appendChild(swatch); row.appendChild(hex);
+    wrap.appendChild(row);
+
+  } else {
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = value ?? '';
+    input.oninput = () => { setPath(CONFIG, field.path, input.value); refreshPreview(); };
+    wrap.appendChild(input);
+  }
+
+  if (field.help) {
+    const help = document.createElement('div');
+    help.className = 'help'; help.textContent = field.help;
+    wrap.appendChild(help);
+  }
+  return wrap;
+}
+
+function renderForm() {
+  const form = document.getElementById('form');
+  const nav = document.getElementById('nav');
+  form.innerHTML = ''; nav.innerHTML = '';
+
+  SCHEMA.forEach(section => {
+    const link = document.createElement('a');
+    link.href = '#sec-' + section.id;
+    link.textContent = section.title;
+    nav.appendChild(link);
+
+    const card = document.createElement('section');
+    card.className = 'card';
+    card.id = 'sec-' + section.id;
+
+    const title = document.createElement('h2');
+    title.textContent = section.title;
+    card.appendChild(title);
+
+    if (section.hint) {
+      const hint = document.createElement('p');
+      hint.className = 'hint'; hint.textContent = section.hint;
+      card.appendChild(hint);
+    }
+
+    const grid = document.createElement('div');
+    grid.className = 'grid';
+    section.fields.forEach(field => grid.appendChild(buildField(field)));
+    card.appendChild(grid);
+    form.appendChild(card);
+  });
+
+  setupScrollSpy();
+}
+
+function setupScrollSpy() {
+  const links = [...document.querySelectorAll('#nav a')];
+  const observer = new IntersectionObserver(entries => {
+    entries.forEach(entry => {
+      if (!entry.isIntersecting) return;
+      links.forEach(a => a.classList.toggle(
+        'active', a.getAttribute('href') === '#' + entry.target.id));
+    });
+  }, { rootMargin: '-80px 0px -70% 0px' });
+  document.querySelectorAll('section.card').forEach(el => observer.observe(el));
+}
+
+// ---------- live preview ----------
+const PT = 1.333;          // points to screen pixels
+const TW = 1 / 15;         // twips to screen pixels
+
+function styleString(spec, extra) {
+  const parts = [];
+  if (spec.font) parts.push(`font-family:'${spec.font}',sans-serif`);
+  if (spec.fontSize) parts.push(`font-size:${(spec.fontSize * PT * 0.82).toFixed(1)}px`);
+  if (spec.color) parts.push(`color:#${spec.color}`);
+  parts.push(`font-weight:${spec.bold ? 700 : 400}`);
+  parts.push(`font-style:${spec.italic ? 'italic' : 'normal'}`);
+  if (spec.all_caps) parts.push('text-transform:uppercase');
+  if (spec.spacing_before !== undefined)
+    parts.push(`margin-top:${(spec.spacing_before * TW).toFixed(1)}px`);
+  if (spec.spacing_after !== undefined)
+    parts.push(`margin-bottom:${(spec.spacing_after * TW).toFixed(1)}px`);
+  if (spec.line_spacing) parts.push(`line-height:${spec.line_spacing}`);
+  return parts.join(';') + (extra ? ';' + extra : '');
+}
+
+function refreshPreview() {
+  const s = CONFIG.styles, h = s.headings, b = s.paragraph.body;
+  const out = [];
+
+  const toc = s.toc;
+  out.push(`<div style="${styleString({
+    font: toc.title_font, fontSize: toc.title_fontSize, bold: toc.title_bold,
+    color: toc.title_color, spacing_before: 0, spacing_after: toc.spacing_after
+  })}">${escapeHtml(toc.title)}</div>`);
+
+  [['Introduction', 1], ['System Overview', 2]].forEach(([entry, level], i) => {
+    out.push(`<div style="${styleString({
+      font: toc.entry_font, fontSize: toc.entry_fontSize, color: toc.entry_color,
+      bold: level === 1 ? toc.entry_bold_level1 : false,
+      spacing_before: 0, spacing_after: toc.entry_spacing_after
+    })};display:flex;justify-content:space-between;padding-left:${(level - 1) * 14}px">
+      <span>${escapeHtml(headingNumber(level))}${entry}</span><span>${i + 1}</span></div>`);
+  });
+
+  out.push(`<div style="border-top:1px dashed #e2ddd6;margin:14px 0"></div>`);
+
+  out.push(`<div style="${styleString(h.heading_1, headingIndent(1))}">${escapeHtml(headingNumber(1))}Heading 1</div>`);
+  out.push(`<div style="${styleString(b)}">Body text shows the font, size, colour and spacing you have chosen.</div>`);
+  out.push(`<div style="${styleString(h.heading_2, headingIndent(2))}">${escapeHtml(headingNumber(2))}Heading 2</div>`);
+  out.push(`<div style="${styleString(b)}">A second paragraph of body text for spacing reference.</div>`);
+  out.push(`<div style="${styleString(h.heading_3, headingIndent(3))}">${escapeHtml(headingNumber(3))}Heading 3</div>`);
+  out.push(`<div style="${styleString(h.heading_4, headingIndent(4))}">${escapeHtml(headingNumber(4))}Heading 4</div>`);
+
+  [1, 2].forEach(level => {
+    const bullet = s.bullets['level_' + level];
+    if (!bullet) return;
+    out.push(`<div class="pv-bullet" style="${styleString(bullet, `padding-left:${(bullet.indent * TW).toFixed(1)}px`)}">
+      <span class="mark">${escapeHtml(bullet.bullet_char)}</span>
+      <span>Bullet point at level ${level}</span></div>`);
+  });
+
+  const c = s.paragraph.caption;
+  out.push(`<div style="${styleString(c)}">Figure 1: caption text</div>`);
+
+  if (s.paragraph.quote) {
+    const q = s.paragraph.quote;
+    out.push(`<div style="${styleString(q, `padding-left:${(q.indent * TW).toFixed(1)}px;border-left:2px solid #c8ddd0`)}">Quote block text</div>`);
+  }
+
+  document.getElementById('preview').innerHTML = out.join('');
+}
+
+const escapeHtml = str => String(str).replace(/[&<>"]/g,
+  ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+// Mirrors HEADING_NUMBER_FORMATS in template_builder.py
+const NUMBER_TEXTS = {
+  decimal:     ['1', '1.1', '1.1.1', '1.1.1.1'],
+  decimal_dot: ['1.', '1.1.', '1.1.1.', '1.1.1.1.'],
+  legal:       ['1.0', '1.1', '1.1.1', '1.1.1.1'],
+  chapter:     ['Chapter 1', '1.1', '1.1.1', '1.1.1.1'],
+  section:     ['Section 1', '1.1', '1.1.1', '1.1.1.1'],
+  outline:     ['I.', 'A.', '1.', 'a.']
+};
+
+function headingNumber(level) {
+  const d = CONFIG.document || {};
+  if (!d.number_headings) return '';
+  if (level > Number(d.number_levels || 4)) return '';
+  const texts = NUMBER_TEXTS[d.number_format] || NUMBER_TEXTS.decimal;
+  const gap = d.number_suffix === 'nothing' ? ''
+            : d.number_suffix === 'space' ? '\u00a0' : '\u2003';
+  return texts[level - 1] + gap;
+}
+
+function headingIndent(level) {
+  const d = CONFIG.document || {};
+  if (!d.number_headings || !d.number_indent) return '';
+  if (level > Number(d.number_levels || 4)) return '';
+  return `padding-left:${(360 * level * TW).toFixed(1)}px`;
+}
+
+// ---------- status ----------
+function status(message, kind) {
+  document.getElementById('status').innerHTML =
+    kind ? `<span class="${kind}">${message}</span>` : message;
+}
+
+// ---------- actions ----------
+async function post(url, body) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body || {})
+  });
+  return response.json();
+}
+
+document.getElementById('btn-browse').onclick = async () => {
+  status('Opening the folder dialog…');
+  const result = await post('/api/browse');
+  if (result.ok) { document.getElementById('outdir').value = result.path; status(''); }
+  else status(result.error, 'err');
+};
+
+document.getElementById('btn-generate').onclick = async () => {
+  const button = document.getElementById('btn-generate');
+  button.disabled = true;
+  status('Generating…');
+  const result = await post('/api/generate', {
+    config: CONFIG,
+    output_dir: document.getElementById('outdir').value,
+    filename: document.getElementById('filename').value
+  });
+  button.disabled = false;
+  if (result.ok) {
+    LAST_PATH = result.path;
+    document.getElementById('btn-open').disabled = false;
+    document.getElementById('btn-download').disabled = false;
+    status(`Saved <code>${escapeHtml(result.path)}</code> (${result.size_kb} KB)`, 'ok');
+  } else {
+    status(escapeHtml(result.error), 'err');
+  }
+};
+
+document.getElementById('btn-open').onclick = async () => {
+  const result = await post('/api/open-folder', { path: LAST_PATH });
+  if (!result.ok) status(escapeHtml(result.error), 'err');
+};
+
+document.getElementById('btn-download').onclick = () => {
+  if (LAST_PATH) window.location = '/api/file?path=' + encodeURIComponent(LAST_PATH);
+};
+
+document.getElementById('preset').onchange = async event => {
+  const name = event.target.value;
+  if (!name) return;
+  const result = await post('/api/preset', { name, config: CONFIG });
+  if (result.ok) {
+    CONFIG = result.config;
+    renderForm(); refreshPreview();
+    status(`Preset applied: ${escapeHtml(name)}`, 'ok');
+  }
+  event.target.value = '';
+};
+
+document.getElementById('btn-reset').onclick = () => bootstrap(true);
+
+// ---------- start ----------
+async function bootstrap(keepPaths) {
+  const data = await (await fetch('/api/bootstrap')).json();
+  SCHEMA = data.schema;
+  CONFIG = data.config;
+  PRESETS = data.presets;
+
+  const presetSelect = document.getElementById('preset');
+  presetSelect.innerHTML = '<option value="">Apply a preset…</option>';
+  Object.keys(PRESETS).forEach(name => {
+    const option = document.createElement('option');
+    option.value = name; option.textContent = name;
+    presetSelect.appendChild(option);
+  });
+
+  if (!keepPaths) document.getElementById('outdir').value = data.output_dir;
+  renderForm();
+  refreshPreview();
+}
+
+bootstrap();
+</script>
+</body>
+</html>

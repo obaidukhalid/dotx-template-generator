@@ -1,0 +1,116 @@
+{
+  "VEmbed Green": {
+    "styles": {
+      "headings": {
+        "heading_1": {"font": "Calibri", "fontSize": 22, "color": "006600", "bold": true, "italic": false},
+        "heading_2": {"font": "Calibri", "fontSize": 16, "color": "005200", "bold": true, "italic": false},
+        "heading_3": {"font": "Calibri", "fontSize": 13, "color": "1E293B", "bold": true, "italic": false},
+        "heading_4": {"font": "Calibri", "fontSize": 11, "color": "3A506B", "bold": true, "italic": true}
+      },
+      "paragraph": {
+        "body": {"font": "Calibri", "fontSize": 11, "color": "1E293B", "line_spacing": 1.15},
+        "caption": {"font": "Calibri", "fontSize": 9, "color": "6B7280", "italic": true},
+        "quote": {"font": "Calibri", "fontSize": 11, "color": "3A506B", "italic": true}
+      },
+      "text": {"highlight": {"bold": true, "color": "006600"}},
+      "bullets": {
+        "level_1": {"font": "Calibri", "fontSize": 11, "color": "1E293B", "bullet_char": "\u2022"},
+        "level_2": {"font": "Calibri", "fontSize": 11, "color": "1E293B", "bullet_char": "\u25e6"}
+      },
+      "toc": {"title_font": "Calibri", "title_color": "006600", "entry_font": "Calibri", "entry_color": "1E293B"}
+    },
+    "page_setup": {"default_font": "Calibri"}
+  },
+
+  "Corporate Blue": {
+    "styles": {
+      "headings": {
+        "heading_1": {"font": "Segoe UI", "fontSize": 22, "color": "003366", "bold": true, "italic": false},
+        "heading_2": {"font": "Segoe UI", "fontSize": 16, "color": "004C99", "bold": true, "italic": false},
+        "heading_3": {"font": "Segoe UI", "fontSize": 13, "color": "1E293B", "bold": true, "italic": false},
+        "heading_4": {"font": "Segoe UI", "fontSize": 11, "color": "334155", "bold": true, "italic": true}
+      },
+      "paragraph": {
+        "body": {"font": "Segoe UI", "fontSize": 11, "color": "1E293B", "line_spacing": 1.15},
+        "caption": {"font": "Segoe UI", "fontSize": 9, "color": "64748B", "italic": true},
+        "quote": {"font": "Segoe UI", "fontSize": 11, "color": "334155", "italic": true}
+      },
+      "text": {"highlight": {"bold": true, "color": "004C99"}},
+      "bullets": {
+        "level_1": {"font": "Segoe UI", "fontSize": 11, "color": "1E293B", "bullet_char": "\u25aa"},
+        "level_2": {"font": "Segoe UI", "fontSize": 11, "color": "1E293B", "bullet_char": "\u25e6"}
+      },
+      "toc": {"title_font": "Segoe UI", "title_color": "003366", "entry_font": "Segoe UI", "entry_color": "1E293B"}
+    },
+    "page_setup": {"default_font": "Segoe UI"}
+  },
+
+  "Monochrome": {
+    "styles": {
+      "headings": {
+        "heading_1": {"font": "Arial", "fontSize": 20, "color": "111111", "bold": true, "italic": false},
+        "heading_2": {"font": "Arial", "fontSize": 15, "color": "333333", "bold": true, "italic": false},
+        "heading_3": {"font": "Arial", "fontSize": 12, "color": "444444", "bold": true, "italic": false},
+        "heading_4": {"font": "Arial", "fontSize": 11, "color": "555555", "bold": true, "italic": true}
+      },
+      "paragraph": {
+        "body": {"font": "Arial", "fontSize": 11, "color": "222222", "line_spacing": 1.15},
+        "caption": {"font": "Arial", "fontSize": 9, "color": "777777", "italic": true},
+        "quote": {"font": "Arial", "fontSize": 11, "color": "555555", "italic": true}
+      },
+      "text": {"highlight": {"bold": true, "color": "000000"}},
+      "bullets": {
+        "level_1": {"font": "Arial", "fontSize": 11, "color": "222222", "bullet_char": "\u2013"},
+        "level_2": {"font": "Arial", "fontSize": 11, "color": "222222", "bullet_char": "\u25e6"}
+      },
+      "toc": {"title_font": "Arial", "title_color": "111111", "entry_font": "Arial", "entry_color": "222222"}
+    },
+    "page_setup": {"default_font": "Arial"}
+  },
+
+  "Classic Serif": {
+    "styles": {
+      "headings": {
+        "heading_1": {"font": "Cambria", "fontSize": 20, "color": "1A1A1A", "bold": true, "italic": false},
+        "heading_2": {"font": "Cambria", "fontSize": 15, "color": "1A1A1A", "bold": true, "italic": false},
+        "heading_3": {"font": "Cambria", "fontSize": 12.5, "color": "1A1A1A", "bold": true, "italic": false},
+        "heading_4": {"font": "Cambria", "fontSize": 11.5, "color": "1A1A1A", "bold": false, "italic": true}
+      },
+      "paragraph": {
+        "body": {"font": "Times New Roman", "fontSize": 12, "color": "000000", "line_spacing": 1.5},
+        "caption": {"font": "Times New Roman", "fontSize": 10, "color": "555555", "italic": true},
+        "quote": {"font": "Times New Roman", "fontSize": 12, "color": "333333", "italic": true}
+      },
+      "text": {"highlight": {"bold": true, "color": ""}},
+      "bullets": {
+        "level_1": {"font": "Times New Roman", "fontSize": 12, "color": "000000", "bullet_char": "\u2022"},
+        "level_2": {"font": "Times New Roman", "fontSize": 12, "color": "000000", "bullet_char": "\u25e6"}
+      },
+      "toc": {"title_font": "Cambria", "title_color": "1A1A1A", "entry_font": "Times New Roman", "entry_color": "000000"}
+    },
+    "page_setup": {"default_font": "Times New Roman", "default_font_size": 12}
+  },
+
+  "Technical Documentation": {
+    "styles": {
+      "headings": {
+        "heading_1": {"font": "Segoe UI", "fontSize": 20, "color": "0F172A", "bold": true, "italic": false},
+        "heading_2": {"font": "Segoe UI", "fontSize": 15, "color": "1E3A5F", "bold": true, "italic": false},
+        "heading_3": {"font": "Segoe UI", "fontSize": 12, "color": "1E293B", "bold": true, "italic": false},
+        "heading_4": {"font": "Consolas", "fontSize": 11, "color": "1E293B", "bold": true, "italic": false}
+      },
+      "paragraph": {
+        "body": {"font": "Segoe UI", "fontSize": 10.5, "color": "1E293B", "line_spacing": 1.2},
+        "caption": {"font": "Segoe UI", "fontSize": 9, "color": "6B7280", "italic": true},
+        "quote": {"font": "Consolas", "fontSize": 10, "color": "334155", "italic": false}
+      },
+      "text": {"highlight": {"bold": true, "color": "0369A1"}},
+      "bullets": {
+        "level_1": {"font": "Segoe UI", "fontSize": 10.5, "color": "1E293B", "bullet_char": "\u25aa"},
+        "level_2": {"font": "Segoe UI", "fontSize": 10.5, "color": "1E293B", "bullet_char": "\u2013"}
+      },
+      "toc": {"title_font": "Segoe UI", "title_color": "0F172A", "entry_font": "Segoe UI", "entry_color": "1E293B"}
+    },
+    "page_setup": {"default_font": "Segoe UI", "default_font_size": 10.5}
+  }
+}
