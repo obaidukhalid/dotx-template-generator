@@ -3,6 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="{{ csrf_token }}">
 <title>Template Studio</title>
 <style>
   :root {
@@ -498,10 +499,17 @@ function status(message, kind) {
 }
 
 // ---------- actions ----------
+// The server rejects any mutating request that does not carry this token, which
+// is what stops another site in your browser from driving this app.
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+
 async function post(url, body) {
   const response = await fetch(url, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
+    headers: {
+      'Content-Type': 'application/json',
+      'X-CSRF-Token': CSRF_TOKEN
+    },
     body: JSON.stringify(body || {})
   });
   return response.json();

@@ -10,13 +10,16 @@ Then open http://127.0.0.1:5000 in a browser. The browser opens automatically.
 """
 
 import copy
+import hmac
 import json
 import os
 import platform
+import secrets
 import subprocess
 import sys
 import threading
 import webbrowser
+from urllib.parse import quote
 
 from flask import Flask, jsonify, request, send_file, render_template
 
@@ -26,8 +29,107 @@ APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(APP_DIR, "config.json")
 PRESETS_PATH = os.path.join(APP_DIR, "presets.json")
 
+HOST = "127.0.0.1"
+PORT = 5000
+
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
+
+
+# ----------------------------------------------------------------------------
+# Security
+#
+# The server binds to loopback, but that alone protects nothing: any page you
+# happen to have open in the same browser can send requests to 127.0.0.1, and a
+# hostile DNS record can point an attacker's domain at loopback so their scripts
+# read the responses too. Three checks close that off.
+#
+#   1. Host header must be one we recognise, which is what stops DNS rebinding:
+#      the browser sends the attacker's hostname, not ours.
+#   2. Origin, when the browser sends one, must be this app.
+#   3. Every mutating request must carry a token that is only ever handed to the
+#      real page. A cross-origin caller cannot read it.
+#
+# Requests are also parsed as strict JSON, so a form POST — the one shape that
+# crosses origins without a preflight — is rejected before any handler runs.
+# ----------------------------------------------------------------------------
+
+CSRF_TOKEN = secrets.token_urlsafe(32)
+
+ALLOWED_HOSTS = frozenset({
+    f"127.0.0.1:{PORT}", f"localhost:{PORT}", f"[::1]:{PORT}",
+})
+ALLOWED_ORIGINS = frozenset(f"http://{host}" for host in ALLOWED_HOSTS)
+
+# Serving a file by path is a read primitive, so it is limited to files this
+# process actually generated rather than anything on disk.
+GENERATED_FILES = set()
+GENERATED_LOCK = threading.Lock()
+
+
+def remember_generated(path):
+    with GENERATED_LOCK:
+        GENERATED_FILES.add(os.path.abspath(path))
+
+
+def is_generated(path):
+    return os.path.abspath(path) in GENERATED_FILES
+
+
+def deny(message, code=403):
+    return jsonify({"ok": False, "error": message}), code
+
+
+@app.before_request
+def guard_request():
+    if request.host not in ALLOWED_HOSTS:
+        return deny("Unrecognised Host header.")
+
+    if request.method not in ("GET", "HEAD", "OPTIONS"):
+        origin = request.headers.get("Origin")
+        if origin is not None and origin not in ALLOWED_ORIGINS:
+            return deny("Cross-origin request refused.")
+        if not hmac.compare_digest(
+            request.headers.get("X-CSRF-Token", ""), CSRF_TOKEN
+        ):
+            return deny("Missing or invalid CSRF token.")
+    return None
+
+
+def read_json():
+    """Parse a JSON body strictly. Never force: the Content-Type requirement is
+    what makes a cross-origin form POST impossible without a preflight."""
+    payload = request.get_json(silent=True)
+    return payload if isinstance(payload, dict) else {}
+
+
+def conform_to(candidate, template):
+    """Return candidate reshaped to template: unknown keys dropped, values kept
+    only when their type matches. Config is written straight to disk, so it is
+    never trusted to define its own shape."""
+    if not isinstance(candidate, dict):
+        return copy.deepcopy(template)
+    result = copy.deepcopy(template)
+    for key, reference in template.items():
+        if key not in candidate:
+            continue
+        value = candidate[key]
+        if isinstance(reference, dict):
+            result[key] = conform_to(value, reference)
+        elif isinstance(reference, bool):
+            if isinstance(value, bool):
+                result[key] = value
+        elif isinstance(reference, (int, float)):
+            # bool is an int subclass; reject it for a numeric field.
+            if isinstance(value, (int, float)) and not isinstance(value, bool):
+                result[key] = value
+        elif isinstance(reference, str):
+            if isinstance(value, str):
+                result[key] = value
+        elif isinstance(reference, list):
+            if isinstance(value, list):
+                result[key] = value
+    return result
 
 
 # ----------------------------------------------------------------------------
@@ -448,7 +550,7 @@ def reveal_in_file_manager(path):
 
 @app.route("/")
 def index():
-    return render_template("index.html")
+    return render_template("index.html", csrf_token=CSRF_TOKEN)
 
 
 @app.route("/api/bootstrap")
@@ -476,13 +578,15 @@ def api_browse():
 
 @app.route("/api/generate", methods=["POST"])
 def api_generate():
-    payload = request.get_json(force=True)
+    payload = read_json()
 
-    # Merge over the saved defaults so a partial config can never crash the build.
+    # Merge over the saved defaults so a partial config can never crash the
+    # build, and conform it so the same shape rules apply here as in
+    # /api/config — this path writes config.json too.
     try:
-        config = deep_merge(load_config(), payload.get("config") or {})
-    except (OSError, ValueError):
-        config = payload.get("config") or {}
+        config = conform_to(payload.get("config") or {}, load_config())
+    except (OSError, ValueError) as error:
+        return jsonify({"ok": False, "error": f"Cannot read config: {error}"})
 
     output_dir = (payload.get("output_dir") or "").strip()
     filename = (payload.get("filename") or "template").strip()
@@ -507,6 +611,8 @@ def api_generate():
     except Exception as error:  # surfaced to the user in the GUI
         return jsonify({"ok": False, "error": f"{type(error).__name__}: {error}"})
 
+    remember_generated(output_path)
+
     if payload.get("save_config", True):
         try:
             save_config(config)
@@ -522,8 +628,19 @@ def api_generate():
 
 @app.route("/api/open-folder", methods=["POST"])
 def api_open_folder():
-    payload = request.get_json(force=True)
+    payload = read_json()
     path = payload.get("path") or default_output_dir()
+    # Only reveal somewhere this app has actually written, or the default
+    # output folder. Handing an arbitrary path to the file manager is not a
+    # thing the GUI ever needs.
+    allowed = (
+        is_generated(path)
+        or any(os.path.dirname(f) == os.path.abspath(path)
+               for f in GENERATED_FILES)
+        or os.path.abspath(path) == os.path.abspath(default_output_dir())
+    )
+    if not allowed:
+        return deny("That folder is not one this app has written to.")
     if not os.path.exists(path):
         return jsonify({"ok": False, "error": "That path no longer exists."})
     try:
@@ -535,25 +652,35 @@ def api_open_folder():
 
 @app.route("/api/download", methods=["POST"])
 def api_download():
-    payload = request.get_json(force=True)
+    payload = read_json()
     path = payload.get("path")
-    if not path or not os.path.isfile(path):
+    if not path or not is_generated(path) or not os.path.isfile(path):
         return jsonify({"ok": False, "error": "File not found."}), 404
-    return jsonify({"ok": True, "url": "/api/file?path=" + path})
+    return jsonify({
+        "ok": True,
+        "url": "/api/file?path=" + quote(os.path.abspath(path), safe=""),
+    })
 
 
 @app.route("/api/file")
 def api_file():
+    # Reached by a top-level navigation, which cannot carry the CSRF header, so
+    # the allowlist is what protects it: only templates generated by this
+    # process are readable, never an arbitrary path off disk.
     path = request.args.get("path", "")
-    if not os.path.isfile(path):
+    if not path or not is_generated(path) or not os.path.isfile(path):
         return "Not found", 404
-    return send_file(path, as_attachment=True)
+    return send_file(os.path.abspath(path), as_attachment=True)
 
 
 @app.route("/api/config", methods=["POST"])
 def api_save_config():
-    payload = request.get_json(force=True)
-    config = payload.get("config") or {}
+    payload = read_json()
+    try:
+        current = load_config()
+    except (OSError, ValueError) as error:
+        return jsonify({"ok": False, "error": f"Cannot read config: {error}"})
+    config = conform_to(payload.get("config") or {}, current)
     try:
         save_config(config)
     except OSError as error:
@@ -563,7 +690,7 @@ def api_save_config():
 
 @app.route("/api/preset", methods=["POST"])
 def api_preset():
-    payload = request.get_json(force=True)
+    payload = read_json()
     name = payload.get("name")
     current = payload.get("config") or load_config()
     presets = load_presets()
@@ -572,13 +699,16 @@ def api_preset():
     return jsonify({"ok": True, "config": deep_merge(current, presets[name])})
 
 
+APP_URL = f"http://{HOST}:{PORT}"
+
+
 def open_browser():
-    webbrowser.open("http://127.0.0.1:5000")
+    webbrowser.open(APP_URL)
 
 
 if __name__ == "__main__":
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
         threading.Timer(1.2, open_browser).start()
-    print("\n  Template Studio running at http://127.0.0.1:5000")
+    print(f"\n  Template Studio running at {APP_URL}")
     print("  Press Ctrl+C to stop.\n")
-    app.run(host="127.0.0.1", port=5000, debug=False)
+    app.run(host=HOST, port=PORT, debug=False)
