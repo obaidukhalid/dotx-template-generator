@@ -12,35 +12,36 @@ your own computer, and no part of it talks to the internet.
 
 
 -------------------------------------------------------------------------------
- 1. STARTING IT
+ 1. GETTING IT RUNNING
 -------------------------------------------------------------------------------
 
-WINDOWS - THE EASY WAY
-  Double click  TemplateStudio.exe
+You need a Linux or macOS machine with git and Python 3.9 or newer. Nothing
+else, and nothing gets installed outside the project folder.
 
-  That is everything. It needs no Python and installs nothing. A small black
-  console window opens and stays open while the tool runs; closing that window
-  stops it.
+Open a terminal and run these four lines:
 
-  Keep the .exe in a folder you can write to - your Desktop or Documents is
-  ideal. It saves your settings and your feedback in the same folder it sits
-  in, so do not run it from inside a zip file or from Program Files.
+    git clone git@github.com:obaidukhalid/dotx-template-generator.git
+    cd dotx-template-generator
+    git checkout develop
+    ./run.sh
 
-WINDOWS - FROM THE SOURCE CODE
-  Double click  run.bat
-
-MAC OR LINUX
-  Open a terminal in this folder and run:
-      ./run.sh
-
-Any of those three starts the server and opens your browser at:
+The last line does all the work. It builds a private Python environment in a
+.venv folder inside the project, installs what the tool needs into it, starts
+the server, and opens your browser at:
 
       http://127.0.0.1:5000
 
-To stop it, press Ctrl+C in the window it is running in, or just close that
-window.
-
 If the browser does not open by itself, type that address in yourself.
+
+Later runs are just ./run.sh again, and start immediately.
+
+If you get "permission denied" on that last line, run  chmod +x run.sh  once
+and try again.
+
+To stop the tool, press Ctrl+C in the terminal it is running in.
+
+Note the "git checkout develop". The code lives on the develop branch; master
+holds only the README.
 
 
 -------------------------------------------------------------------------------
@@ -188,28 +189,30 @@ file, so earlier feedback is never overwritten.
  6. IF SOMETHING GOES WRONG
 -------------------------------------------------------------------------------
 
-Windows says "Windows protected your PC" and will not run the .exe
-    Expected. The file is not code-signed, because signing needs a paid
-    certificate. Click "More info", then "Run anyway". If you would rather not,
-    use run.bat with the source code instead - it does exactly the same thing.
-    Your antivirus may also quarantine it for the same reason: a single-file
-    PyInstaller executable looks unusual to a scanner even when it is fine.
+./run.sh says "permission denied"
+    The execute bit did not survive the clone. Run  chmod +x run.sh  once.
 
 "Port 5000 is already in use"
-    Something else is on that port. On a Mac this is usually AirPlay Receiver.
-    Close whatever it is and start the tool again. If you are running from the
-    source code you can instead change PORT near the top of app.py - the rest
-    of the app follows from it. The .exe has that value built in, so it needs
-    rebuilding to change.
+    Something else is on that port. Find it with
 
-The console window flashes up and vanishes
-    The server could not start, and the message is going past too fast to
-    read. Open a terminal in the folder with the .exe and run it from there
-    (type TemplateStudio.exe and press Enter); the error then stays on screen.
+        ss -ltnp | grep :5000
 
-"The folder dialog is not available"
-    Your Python has no tkinter. Type the folder path into the box instead, or
+    and close it, then start the tool again. Or change PORT near the top of
+    app.py - the rest of the app follows from that one value. On a Mac the
+    culprit is usually AirPlay Receiver, in System Settings.
+
+"The folder dialog is not available", or Browse does nothing
+    Python has no tkinter. On most Linux distributions it is a separate
+    package:
+
+        sudo apt install python3-tk        (Debian, Ubuntu)
+        sudo dnf install python3-tkinter   (Fedora)
+
+    Everything else works without it - type the folder path into the box, or
     use the Download button.
+
+python3: command not found, or the version is too old
+    The tool needs Python 3.9 or newer. Check with  python3 --version.
 
 The page loads but the buttons do nothing
     Reload the page. The app hands the page a one-time token at load, and the

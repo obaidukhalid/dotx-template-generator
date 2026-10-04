@@ -16,46 +16,48 @@ going to read this file.
 
 ---
 
-## Setup
+## Getting it running
 
-### Windows
-
-Double click `run.bat`. If uv is installed it uses that; otherwise it falls back
-to Python and pip. Either way it installs the dependencies on first run, starts
-the server and opens your browser.
-
-### macOS and Linux
+A Linux or macOS machine with Python 3.9 or newer and git. Nothing else, and
+nothing is installed system-wide.
 
 ```bash
+git clone git@github.com:obaidukhalid/dotx-template-generator.git
+cd dotx-template-generator
+git checkout develop
 ./run.sh
 ```
 
-If uv is installed it hands off to `uv run`; otherwise it falls back to venv and
-pip. On first run either path creates a virtual environment in `.venv` inside
-the project folder, installs the dependencies there and starts the server.
-Nothing is installed into your system Python. Later runs reuse the same
-environment and start immediately.
+`develop` is where the work is. `master` holds only the README.
 
-Delete the `.venv` folder to force a clean reinstall.
+`run.sh` does everything: it creates a virtual environment in `.venv` inside the
+project folder, installs the pinned dependencies into it, starts the server and
+opens your browser at `http://127.0.0.1:5000`. Later runs reuse the same
+environment and start straight away.
 
-### Manual
+If the script is not executable after the clone, `chmod +x run.sh` first.
 
-Two options. Both end up in the same place — a `.venv` in the project folder
-with the same pinned dependencies.
+To stop the server, press `Ctrl+C` in the terminal it is running in.
 
-**With uv (recommended)**
+Nothing leaves your machine. The server binds to `127.0.0.1` and the app makes
+no outbound requests of any kind.
+
+### If you would rather drive it yourself
+
+`run.sh` prefers [uv](https://docs.astral.sh/uv/getting-started/installation/)
+and falls back to venv and pip. Both land in the same place. To do it by hand,
+pick whichever you have.
+
+**With uv**
 
 ```bash
 uv run python app.py
 ```
 
 That is the whole thing. `uv run` reads `pyproject.toml`, installs the exact
-versions recorded in `uv.lock` into `.venv`, creating it if it does not exist,
-and then starts the server. There is no separate install step and no
-environment to activate. If you do not have uv, see
-[the install instructions](https://docs.astral.sh/uv/getting-started/installation/).
-
-To set the environment up without starting the server, use `uv sync`.
+versions recorded in `uv.lock` into `.venv`, creating it if needed, then starts
+the server. No separate install step, no environment to activate. Use `uv sync`
+to set the environment up without starting the server.
 
 **With plain Python**
 
@@ -66,43 +68,51 @@ pip install -r requirements.txt
 python app.py
 ```
 
-On Windows the activate line is `.venv\Scripts\activate` instead.
-
-`requirements.txt` is generated from `uv.lock`, so it holds the same pinned
-versions. Dependencies are declared in `pyproject.toml` — that is the file to
-edit when adding one. Regenerate the export afterwards with:
+`requirements.txt` is exported from `uv.lock`, so it pins the same versions.
+Dependencies are declared in `pyproject.toml` — that is the file to edit when
+adding one. Regenerate the export afterwards with:
 
 ```bash
 uv export --format requirements-txt --no-hashes --no-dev --no-emit-project -o requirements.txt
 ```
 
-The browser opens at `http://127.0.0.1:5000`. Nothing leaves your machine and
-nothing is sent over the internet.
+Delete `.venv` to force a clean reinstall.
 
-Requires Python 3.9 or newer.
+### Checking it works
 
----
+With the server running, in another terminal:
 
-### A Windows executable
-
-To hand the tool to someone who has no Python at all, build a single `.exe`:
-
-```powershell
-.\build_windows_exe.ps1
+```bash
+curl -s -o /dev/null -w '%{http_code}\n' http://127.0.0.1:5000/
 ```
 
-The script makes an isolated `.build-venv`, installs PyInstaller, Flask and
-python-docx into it, and builds `dist\TemplateStudio.exe` — about 18 MB, with
-Python, both HTML pages and the shipped defaults inside it. It needs Python on
-the machine doing the build; the machine that *runs* the exe needs nothing.
+`200` means the app is up. Then generate a template from the GUI and open the
+result in Word or LibreOffice. The styles, the heading numbers and the contents
+field are the three things worth looking at.
 
-Double click the exe and it starts the server and opens the browser, exactly as
-`run.bat` does. Put it in a folder you can write to, because `config.json`,
-`presets.json` and `feedback/` are written **next to the exe** — see `FROZEN`
-in `app.py` for why. Closing the console window stops the server.
+A quick build without the GUI at all:
 
-`TemplateStudio.spec` holds the build definition. `build/`, `dist/`,
-`.build-venv/` and `*.exe` are gitignored; the spec and the script are not.
+```bash
+.venv/bin/python -c "
+import json
+from template_builder import build_template
+build_template(json.load(open('config.json')), '/tmp/test.dotx')
+print('built /tmp/test.dotx')
+"
+```
+
+### Missing tkinter
+
+The `Browse` button opens a native folder dialog, which needs `tkinter`. It is
+not installed with Python on most Linux distributions:
+
+```bash
+sudo apt install python3-tk        # Debian, Ubuntu
+sudo dnf install python3-tkinter   # Fedora
+```
+
+Without it everything else still works — type the save path into the box, or
+use the `Download` button instead.
 
 ---
 
@@ -116,7 +126,7 @@ in `app.py` for why. Closing the console window stops the server.
    folder dialog, or type a path directly.
 4. **Set the file name**. The `.dotx` extension is added automatically.
 5. **Click Generate template.** The status line shows the full path.
-6. **Click Open folder** to reveal the file in Explorer or Finder.
+6. **Click Open folder** to reveal the file in your file manager.
 
 Your settings are saved to `config.json` each time you generate, so the next
 launch picks up where you left off. `Reload saved config` discards unsaved
@@ -292,8 +302,6 @@ heading levels.
 ```
 dotx_studio/
 ├── app.py                 Flask server, field schema, feedback questions, routes
-├── TemplateStudio.spec    PyInstaller definition for the Windows exe
-├── build_windows_exe.ps1  Builds dist\TemplateStudio.exe in an isolated venv
 ├── template_builder.py    Config to .dotx engine
 ├── template_reader.py     .dotx back to config, the inverse within limits
 ├── config.json            Current settings, rewritten on each generate
@@ -302,13 +310,13 @@ dotx_studio/
 │   ├── index.html         The builder GUI, one file, no build step
 │   └── feedback.html      The feedback page, rendered from FEEDBACK_QUESTIONS
 ├── feedback/              Where saved feedback lands, contents gitignored
-├── HOW_TO_USE.txt         Plain text instructions for whoever you hand this to
+├── HOW_TO_USE.txt         Plain text instructions, for testers who want them
 ├── CHANGELOG.md           What changed in each version
 ├── pyproject.toml         Project metadata and dependency declarations
 ├── uv.lock                Exact resolved versions, committed for reproducibility
 ├── requirements.txt       Generated from uv.lock for the non-uv path
-├── run.bat                Windows launcher
-├── run.sh                 macOS and Linux launcher, sets up .venv
+├── run.sh                 The launcher: sets up .venv and starts the server
+├── run.bat                The same for Windows, unmaintained
 └── .venv/                 Created on first run, safe to delete
 ```
 
@@ -420,14 +428,14 @@ not against software you have already installed.
 ## Troubleshooting
 
 **The Browse button says the dialog is not available.**
-The folder dialog needs `tkinter`. On Debian and Ubuntu install it with
-`sudo apt install python3-tk`. On Windows and macOS it ships with Python. You
-can always type the path into the box instead.
+`tkinter` is missing — see [Missing tkinter](#missing-tkinter) above. Type the
+path into the box instead, or use `Download`.
 
 **Port 5000 is already in use.**
-On macOS this is usually AirPlay Receiver. Turn it off in System Settings, or
-change the `PORT` constant near the top of `app.py`. The server checks incoming
-requests against that value, so changing it in one place is enough.
+Find what has it with `ss -ltnp | grep :5000` and stop that, or change the
+`PORT` constant near the top of `app.py`. The server checks incoming requests
+against that value, so changing it in one place is enough. On macOS the culprit
+is usually AirPlay Receiver, in System Settings.
 
 **Colours look wrong in Word.**
 Check the hex value is six characters with no `#`. The colour swatch keeps this

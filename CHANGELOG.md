@@ -61,23 +61,27 @@ box.
   both the page and the saved file, the same way `SCHEMA` drives the builder.
 - `feedback/` is tracked but its contents are not. Feedback is the user's.
 
-### Windows executable
+### Runs from a clone, and survives being frozen
 
-`build_windows_exe.ps1` and `TemplateStudio.spec` build
-`dist\TemplateStudio.exe`, a single ~18 MB file carrying Python, Flask,
-python-docx, both HTML pages and the shipped defaults, so the tool can be
-handed to someone with no Python installed.
+The project is cloned and run in a Python environment:
+`git clone`, `git checkout develop`, `./run.sh`. The README and
+`HOW_TO_USE.txt` now cover exactly that and nothing else.
 
-Three things had to change in `app.py` for it to survive being frozen:
+`app.py` also carries the handful of changes needed to run frozen into a
+single-file executable, which is how the tool gets handed to someone with no
+Python at all. The PyInstaller spec and build script are deliberately **not in
+this repo** — they are Windows-only and would be noise for anyone cloning a
+Python project — so they live on the maintainer's machine and are gitignored.
+The parts that are here:
 
-- Read-only resources now come from `BUNDLE_DIR` (PyInstaller's temporary
+- Read-only resources come from `BUNDLE_DIR` (PyInstaller's temporary
   extraction folder) while everything the app writes goes to `APP_DIR` (the
-  folder holding the `.exe`). Writing into the bundle would have meant settings
-  and feedback vanishing the moment the app closed. `config.json` and
-  `presets.json` are seeded next to the `.exe` on first run and never
-  overwritten; both loaders fall back to the bundled defaults when the
-  writable copy is missing, which is what happens if the `.exe` is run from
-  somewhere read-only.
+  folder holding the executable). Writing into the bundle would have meant
+  settings and feedback vanishing the moment the app closed. `config.json` and
+  `presets.json` are seeded beside the executable on first run and never
+  overwritten; both loaders fall back to the bundled defaults when the writable
+  copy is missing, which is what happens if it is run from somewhere
+  read-only. All of this is inert when running from source.
 - Flask's template folder is pointed at the bundle explicitly.
 - The folder dialog ran as `sys.executable -c <script>`, which frozen would
   have relaunched the whole app instead of showing a dialog. The frozen build
@@ -86,12 +90,13 @@ Three things had to change in `app.py` for it to survive being frozen:
   is created on and would otherwise block Flask.
 
 Startup also now reports where settings are saved, and a port clash prints an
-explanation and holds the console window open rather than closing on a
-traceback nobody can read.
+explanation and holds the window open rather than closing on a traceback
+nobody can read.
 
-Verified by running the built `.exe` from a folder containing nothing else:
-it seeded its settings, served both pages, generated a template, read that
-template back in, saved feedback, and rejected a request with no CSRF token.
+Verified both ways: from a source checkout, and as a built executable run from
+a folder containing nothing else, where it seeded its settings, served both
+pages, generated a template, read that template back in, saved feedback, and
+rejected a request with no CSRF token.
 
 ### Documentation
 
@@ -107,6 +112,13 @@ template back in, saved feedback, and rejected a request with no CSRF token.
 
 `develop` was created as the permanent working line, branched so that `master`
 is a genuine ancestor of it. `master` stays the README-only production line.
+
+`tests-initial` was deleted, locally and on the remote, once every commit on it
+was confirmed present in `develop`.
+
+The Windows build tooling (`TemplateStudio.spec`, `build_windows_exe.ps1`) is
+gitignored rather than tracked, so a clone contains only what a Python
+environment needs.
 
 ## v0.1
 
