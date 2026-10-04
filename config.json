@@ -1,0 +1,162 @@
+{
+  "template": {
+    "name": "VEmbed Document Template",
+    "description": "Template for proposals, reports, guides and study material",
+    "author": "VEmbed",
+    "language": "en-US"
+  },
+  "document": {
+    "include_cover": true,
+    "include_toc": true,
+    "include_style_guide": true,
+    "number_headings": true,
+    "number_format": "decimal",
+    "number_levels": 4,
+    "number_suffix": "tab",
+    "number_indent": false,
+    "outline_type": "none",
+    "title_placeholder": "Document Title",
+    "subtitle_placeholder": "Subtitle or document type",
+    "author_placeholder": "Author name",
+    "date_placeholder": "Date",
+    "reference_placeholder": "Document reference",
+    "header_text": "",
+    "page_numbers": true
+  },
+  "styles": {
+    "headings": {
+      "heading_1": {
+        "font": "Calibri",
+        "fontSize": 22,
+        "bold": true,
+        "italic": false,
+        "all_caps": false,
+        "color": "006600",
+        "spacing_before": 320,
+        "spacing_after": 140
+      },
+      "heading_2": {
+        "font": "Calibri",
+        "fontSize": 16,
+        "bold": true,
+        "italic": false,
+        "all_caps": false,
+        "color": "005200",
+        "spacing_before": 240,
+        "spacing_after": 100
+      },
+      "heading_3": {
+        "font": "Calibri",
+        "fontSize": 13,
+        "bold": true,
+        "italic": false,
+        "all_caps": false,
+        "color": "1E293B",
+        "spacing_before": 180,
+        "spacing_after": 80
+      },
+      "heading_4": {
+        "font": "Calibri",
+        "fontSize": 11,
+        "bold": true,
+        "italic": true,
+        "all_caps": false,
+        "color": "3A506B",
+        "spacing_before": 140,
+        "spacing_after": 60
+      }
+    },
+    "paragraph": {
+      "body": {
+        "font": "Calibri",
+        "fontSize": 11,
+        "bold": false,
+        "italic": false,
+        "color": "1E293B",
+        "spacing_before": 0,
+        "spacing_after": 120,
+        "line_spacing": 1.15
+      },
+      "caption": {
+        "font": "Calibri",
+        "fontSize": 9,
+        "bold": false,
+        "italic": true,
+        "color": "6B7280",
+        "spacing_before": 40,
+        "spacing_after": 160
+      },
+      "quote": {
+        "font": "Calibri",
+        "fontSize": 11,
+        "bold": false,
+        "italic": true,
+        "color": "3A506B",
+        "spacing_before": 140,
+        "spacing_after": 140,
+        "line_spacing": 1.15,
+        "indent": 720
+      }
+    },
+    "text": {
+      "strong": {
+        "bold": true,
+        "color": ""
+      },
+      "emphasis": {
+        "italic": true,
+        "color": ""
+      },
+      "highlight": {
+        "bold": true,
+        "color": "006600"
+      }
+    },
+    "bullets": {
+      "level_1": {
+        "font": "Calibri",
+        "fontSize": 11,
+        "color": "1E293B",
+        "bullet_char": "•",
+        "indent": 0,
+        "spacing_after": 60,
+        "line_spacing": 1.15
+      },
+      "level_2": {
+        "font": "Calibri",
+        "fontSize": 11,
+        "color": "1E293B",
+        "bullet_char": "◦",
+        "indent": 360,
+        "spacing_after": 60,
+        "line_spacing": 1.15
+      }
+    },
+    "toc": {
+      "title": "Table of Contents",
+      "title_font": "Calibri",
+      "title_fontSize": 18,
+      "title_bold": true,
+      "title_color": "006600",
+      "levels": "1-4",
+      "entry_font": "Calibri",
+      "entry_fontSize": 11,
+      "entry_color": "1E293B",
+      "entry_bold_level1": true,
+      "entry_spacing_after": 40,
+      "spacing_after": 200
+    }
+  },
+  "page_setup": {
+    "page_size": "A4",
+    "orientation": "portrait",
+    "default_font": "Calibri",
+    "default_font_size": 11,
+    "margins": {
+      "top": 1440,
+      "bottom": 1440,
+      "left": 1440,
+      "right": 1440
+    }
+  }
+}

@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="csrf-token" content="{{ csrf_token }}">
+<title>Template Studio &mdash; Feedback</title>
+<style>
+  :root {
+    --dark: #1e293b;
+    --dark2: #2d3f55;
+    --dark3: #3a506b;
+    --cream: #f5f2ee;
+    --green: #006600;
+    --green-hover: #005200;
+    --green-text: #7ec87e;
+    --green-light: #e6f2eb;
+    --green-mid: #c8ddd0;
+    --warm-gray: #e8e4df;
+    --muted: #6b7280;
+    --border: #e2ddd6;
+    --white: #ffffff;
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    background: var(--cream);
+    color: var(--dark);
+    font-size: 14px;
+  }
+
+  header {
+    background: var(--dark);
+    color: var(--white);
+    padding: 14px 24px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    position: sticky;
+    top: 0;
+    z-index: 40;
+  }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; letter-spacing: .2px; }
+  header .tag {
+    font-size: 12px; color: var(--green-text); border: 1px solid var(--green-text);
+    padding: 2px 8px; border-radius: 10px;
+  }
+  header .spacer { flex: 1; }
+  header .navlink {
+    color: var(--white); text-decoration: none; font-size: 13px;
+    font-weight: 600; padding: 8px 12px; border-radius: 6px;
+    border: 1px solid var(--dark3);
+  }
+  header .navlink:hover { background: var(--dark2); }
+
+  main { max-width: 760px; margin: 0 auto; padding: 24px 24px 60px; }
+
+  .intro {
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 18px; margin-bottom: 18px;
+  }
+  .intro h2 { margin: 0 0 8px; font-size: 15px; }
+  .intro p { margin: 0 0 8px; color: var(--dark3); line-height: 1.5; }
+  .intro p:last-child { margin-bottom: 0; }
+  .intro code {
+    font-family: ui-monospace, Consolas, monospace; background: var(--warm-gray);
+    padding: 1px 5px; border-radius: 3px; font-size: 12.5px;
+  }
+
+  .q {
+    background: var(--white); border: 1px solid var(--border);
+    border-radius: 8px; padding: 14px 18px 16px; margin-bottom: 12px;
+  }
+  .q .text { font-weight: 600; font-size: 13.5px; margin-bottom: 10px; }
+  .q .num { color: var(--green); margin-right: 6px; }
+
+  .scale { display: flex; flex-wrap: wrap; gap: 8px; }
+  .scale label {
+    display: flex; align-items: center; gap: 6px; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 6px;
+    padding: 6px 11px; font-size: 12.5px; background: var(--cream);
+  }
+  .scale label:hover { border-color: var(--green-mid); }
+  .scale input { accent-color: var(--green); margin: 0; }
+  .scale input:checked + span { font-weight: 600; color: var(--green); }
+
+  select, textarea {
+    width: 100%; padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 5px; font-size: 13px; background: var(--white);
+    color: var(--dark); font-family: inherit;
+  }
+  textarea { min-height: 130px; resize: vertical; line-height: 1.5; }
+  select:focus, textarea:focus {
+    outline: none; border-color: var(--green);
+    box-shadow: 0 0 0 2px var(--green-light);
+  }
+
+  .actions {
+    display: flex; flex-wrap: wrap; gap: 10px; align-items: center;
+    margin-top: 18px;
+  }
+  button {
+    font-family: inherit; font-size: 13px; font-weight: 600;
+    padding: 9px 15px; border-radius: 6px; cursor: pointer;
+    border: 1px solid transparent; white-space: nowrap;
+  }
+  button.primary { background: var(--green); color: var(--white); }
+  button.primary:hover { background: var(--green-hover); }
+  button.ghost {
+    background: var(--white); color: var(--dark); border-color: var(--border);
+  }
+  button.ghost:hover { background: var(--warm-gray); }
+  button:disabled { opacity: .5; cursor: not-allowed; }
+
+  #status { font-size: 12.5px; min-height: 18px; margin-top: 12px; }
+  #status .ok { color: var(--green); }
+  #status .err { color: #b3001b; }
+  #status code {
+    font-family: ui-monospace, Consolas, monospace; background: var(--warm-gray);
+    padding: 1px 5px; border-radius: 3px; word-break: break-all;
+  }
+
+  .sent {
+    background: var(--green-light); border: 1px solid var(--green-mid);
+    border-radius: 8px; padding: 14px 18px; margin-top: 16px; line-height: 1.6;
+  }
+  .sent h3 { margin: 0 0 6px; font-size: 14px; }
+  .sent ol { margin: 6px 0 0; padding-left: 22px; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>Template Studio</h1>
+  <span class="tag">v{{ version }}</span>
+  <div class="spacer"></div>
+  <a class="navlink" href="/">Back to the builder</a>
+</header>
+
+<main>
+  <div class="intro">
+    <h2>Tell me how this is working for you</h2>
+    <p>
+      Six quick questions and a box for anything else. Saving writes a plain
+      text file into the <code>feedback</code> folder next to the app, so
+      nothing leaves your machine until you send it yourself.
+    </p>
+    <p>
+      Once it is saved, email it to <strong>{{ email }}</strong> with the
+      subject <strong>{{ subject }}</strong>. The button below opens your mail
+      program with that already filled in.
+    </p>
+  </div>
+
+  <form id="form" onsubmit="return false">
+    {% for item in questions %}
+    <div class="q">
+      <div class="text">
+        <span class="num">{{ loop.index }}.</span>{{ item.question }}
+      </div>
+
+      {% if item.type == 'scale' %}
+      <div class="scale">
+        {% for value, label in item.options %}
+        <label>
+          <input type="radio" name="{{ item.id }}" value="{{ value }}">
+          <span>{{ label }}</span>
+        </label>
+        {% endfor %}
+      </div>
+
+      {% elif item.type == 'choice' %}
+      <select name="{{ item.id }}">
+        <option value="">No answer</option>
+        {% for value, label in item.options %}
+        <option value="{{ value }}">{{ label }}</option>
+        {% endfor %}
+      </select>
+
+      {% else %}
+      <textarea name="{{ item.id }}"
+        placeholder="Whatever is on your mind. Specifics help most."></textarea>
+      {% endif %}
+    </div>
+    {% endfor %}
+  </form>
+
+  <div class="actions">
+    <button class="primary" id="btn-save">Save feedback</button>
+    <button class="ghost" id="btn-mail" disabled>Open email to {{ email }}</button>
+    <button class="ghost" id="btn-copy" disabled>Copy to clipboard</button>
+    <button class="ghost" id="btn-folder" disabled>Open feedback folder</button>
+  </div>
+  <div id="status"></div>
+
+  <div class="sent" id="sent" hidden>
+    <h3>Saved. One more step to get it to me.</h3>
+    <ol>
+      <li>Click <strong>Open email</strong>. Your mail program opens with the
+        address and subject already set.</li>
+      <li>If the feedback text is too long for your mail program to carry in
+        the link, attach the saved file instead &mdash;
+        <strong>Open feedback folder</strong> takes you to it.</li>
+      <li>Send it.</li>
+    </ol>
+  </div>
+</main>
+
+<script>
+const CSRF_TOKEN = document.querySelector('meta[name="csrf-token"]').content;
+const EMAIL = {{ email | tojson }};
+const SUBJECT = {{ subject | tojson }};
+
+// Mail programs and browsers truncate long mailto links, and the limit is not
+// something we can discover from here. Below this length the feedback goes in
+// the body; above it the body just says to attach the file.
+const MAILTO_BODY_LIMIT = 1500;
+
+let SAVED_TEXT = null, SAVED_PATH = null;
+
+const escapeHtml = str => String(str).replace(/[&<>"]/g,
+  ch => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[ch]));
+
+function status(message, kind) {
+  document.getElementById('status').innerHTML =
+    kind ? `<span class="${kind}">${message}</span>` : message;
+}
+
+async function post(url, body) {
+  const response = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-CSRF-Token': CSRF_TOKEN },
+    body: JSON.stringify(body || {})
+  });
+  return response.json();
+}
+
+function collect() {
+  const form = document.getElementById('form');
+  const answers = {};
+  new FormData(form).forEach((value, key) => { answers[key] = value; });
+  // An unanswered radio group sends nothing, so fill the gaps explicitly.
+  form.querySelectorAll('[name]').forEach(el => {
+    if (!(el.name in answers)) answers[el.name] = '';
+  });
+  return answers;
+}
+
+document.getElementById('btn-save').onclick = async () => {
+  const answers = collect();
+  const answered = Object.values(answers).some(v => String(v).trim() !== '');
+  if (!answered) {
+    status('Answer at least one question first.', 'err');
+    return;
+  }
+
+  const button = document.getElementById('btn-save');
+  button.disabled = true;
+  status('Saving…');
+  const result = await post('/api/feedback', { answers });
+  button.disabled = false;
+
+  if (!result.ok) { status(escapeHtml(result.error), 'err'); return; }
+
+  SAVED_TEXT = result.text;
+  SAVED_PATH = result.path;
+  ['btn-mail', 'btn-copy', 'btn-folder'].forEach(
+    id => document.getElementById(id).disabled = false);
+  document.getElementById('sent').hidden = false;
+  status(`Saved <code>${escapeHtml(result.path)}</code>`, 'ok');
+};
+
+document.getElementById('btn-mail').onclick = () => {
+  if (!SAVED_TEXT) return;
+  const body = SAVED_TEXT.length <= MAILTO_BODY_LIMIT
+    ? SAVED_TEXT
+    : `My feedback is attached as a text file.\n\nSaved at: ${SAVED_PATH}\n`;
+  window.location = 'mailto:' + encodeURIComponent(EMAIL)
+    + '?subject=' + encodeURIComponent(SUBJECT)
+    + '&body=' + encodeURIComponent(body);
+  if (SAVED_TEXT.length > MAILTO_BODY_LIMIT) {
+    status('Your feedback is long, so attach the saved file to the email '
+      + 'rather than relying on the pre-filled body.', 'ok');
+  }
+};
+
+document.getElementById('btn-copy').onclick = async () => {
+  if (!SAVED_TEXT) return;
+  try {
+    await navigator.clipboard.writeText(SAVED_TEXT);
+    status('Copied. Paste it into an email to ' + escapeHtml(EMAIL)
+      + ' with the subject ' + escapeHtml(SUBJECT) + '.', 'ok');
+  } catch (error) {
+    status('Your browser blocked the clipboard. Open the saved file and copy '
+      + 'from there.', 'err');
+  }
+};
+
+document.getElementById('btn-folder').onclick = async () => {
+  const result = await post('/api/open-folder', { path: SAVED_PATH });
+  if (!result.ok) status(escapeHtml(result.error), 'err');
+};
+</script>
+</body>
+</html>

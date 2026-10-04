@@ -1,34 +1,48 @@
-# Template Studio
+# Template Studio v0.2
 
-A local web GUI that turns styling settings into a real Word template (`.dotx`).
+Builds Word template files (`.dotx`). You pick fonts, sizes, colours and spacing
+in your browser and it writes the template to disk.
 
-Set your fonts, sizes, colours, spacing and bullets in the browser, watch the live
-preview update, pick a folder, click Generate. The template is written straight to
-disk and you can open the containing folder from the same screen.
+Everything runs on your own machine. Nothing is uploaded.
 
 ---
 
-## Setup
+## 1. Requirements
 
-### Windows
+- Linux or macOS
+- Python 3.9 or newer
+- git
+- A browser (Firefox, Chrome or Edge)
 
-Double click `run.bat`. It checks for Python, installs the two dependencies on
-first run, starts the server and opens your browser.
+---
 
-### macOS and Linux
+## 2. Run it
 
 ```bash
+git clone git@github.com:obaidukhalid/dotx-template-generator.git
+cd dotx-template-generator
 ./run.sh
 ```
 
-On first run it creates a virtual environment in `.venv` inside the project
-folder, installs the dependencies there and starts the server. Nothing is
-installed into your system Python. Later runs reuse the same environment and
-start immediately.
+That is all. `run.sh` installs what it needs into a `.venv` folder inside the
+project, starts the server, and opens `http://127.0.0.1:5000`.
 
-Delete the `.venv` folder to force a clean reinstall.
+- Later runs: `./run.sh` again. Starts straight away.
+- Stop it: `Ctrl+C`.
+- Permission denied? Run `chmod +x run.sh` once.
+- No `tkinter`? Install it: `sudo apt install python3-tk` (Debian, Ubuntu) or
+  `sudo dnf install python3-tkinter` (Fedora). Only the `Browse` button needs
+  it.
 
-### Manual
+### Without run.sh
+
+With [uv](https://docs.astral.sh/uv/getting-started/installation/):
+
+```bash
+uv run python app.py
+```
+
+With pip:
 
 ```bash
 python3 -m venv .venv
@@ -37,197 +51,148 @@ pip install -r requirements.txt
 python app.py
 ```
 
-The browser opens at `http://127.0.0.1:5000`. Nothing leaves your machine and
-nothing is sent over the internet.
+---
 
-Requires Python 3.9 or newer.
+## 3. Make a template
+
+1. Choose a preset from the dropdown, or start from the current settings.
+2. Edit the settings. Use the list on the left to jump between sections.
+3. Watch the preview on the right update as you type.
+4. Set the save folder and file name at the bottom.
+5. Click **Generate template**.
+6. Click **Open folder** or **Download** to get the file.
+
+Your settings are saved to `config.json` when you generate, so the next run
+picks up where you left off. **Reload saved config** throws away unsaved edits.
 
 ---
 
-## Using it
+## 4. Restyle a template you already have
 
-1. **Pick a preset** from the dropdown at the top right, or start from the
-   current settings.
-2. **Work through the sections** using the navigation on the left. Every control
-   updates the live preview on the right immediately.
-3. **Set the save folder** in the bar at the bottom. Click `Browse` for a native
-   folder dialog, or type a path directly.
-4. **Set the file name**. The `.dotx` extension is added automatically.
-5. **Click Generate template.** The status line shows the full path.
-6. **Click Open folder** to reveal the file in Explorer or Finder.
+1. Click **Load existing template…** at the top.
+2. Pick a `.dotx` or `.docx`. Every setting fills in from that file.
+3. Check the green panel. It lists what was read and what was not.
+4. Edit what you want.
+5. Click **Generate template**.
 
-Your settings are saved to `config.json` each time you generate, so the next
-launch picks up where you left off. `Reload saved config` discards unsaved
-changes on screen.
+Your original file is never changed. The new file is named
+`<name>_restyled.dotx` by default.
+
+### What you can change
+
+Heading 1 to 4, body text, caption, quote block, both bullet levels, the
+contents list, page size, orientation, margins, the default font, heading
+numbering, cover and header text, and the file's name, description and author.
+
+### What you cannot
+
+Anything the tool has no setting for is dropped:
+
+- Custom styles you made yourself
+- Heading 5 and below
+- Table styles
+- Images
+- The document's text
+
+**Generate** always builds a fresh template from the settings on screen. It does
+not edit your file. Keep the original until you are happy with the new one.
+
+`.doc` and `.dot` cannot be read at all. Open them in Word and save as `.dotx`
+first.
 
 ---
 
-## What you can control
+## 5. Settings reference
 
-| Section | Controls |
+| Section | What it controls |
 |---|---|
-| Template details | Name, description and author stored in the file properties |
-| Document structure | Cover page, contents page, style guide, heading numbering, starter outline, cover placeholders, header text, page numbers |
-| Heading 1 to 4 | Font, size, colour, bold, italic, all caps, space before, space after |
+| Template details | Name, description and author stored in the file |
+| Document structure | Cover page, contents page, style guide, heading numbering, starter outline, header text, page numbers |
+| Heading 1 to 4 | Font, size, colour, bold, italic, all caps, spacing |
 | Body text | Font, size, colour, bold, italic, spacing, line spacing |
-| Caption | Same set, for figure and table captions |
-| Quote block | Same set plus left indent |
+| Caption | Same, for figure and table captions |
+| Quote block | Same, plus left indent |
 | Inline text styles | Bold, italic and highlight colours used inside paragraphs |
-| Bullets level 1 and 2 | Bullet glyph, font, size, colour, indent, spacing |
-| Table of contents | Heading text and styling, levels shown, entry font, size, colour and spacing |
-| Page setup | Page size, orientation, default font and size, four margins |
+| Bullets level 1 and 2 | Glyph, font, size, colour, indent, spacing |
+| Table of contents | Heading text and style, levels shown, entry style |
+| Page setup | Page size, orientation, default font and size, margins |
 
 ### Heading numbering
 
-Turn on **Number the headings** and Word numbers Heading 1 to 4 automatically
-using a multilevel list attached to the styles. You never type a number. Word
-renumbers everything as you add, move or delete sections, and the numbers carry
-through into the contents list.
+Turn on **Number the headings** and Word numbers Heading 1 to 4 for you. You
+never type a number. Word renumbers as you add, move or delete sections, and the
+numbers appear in the contents list.
 
-Available formats:
-
-| Setting | Result |
+| Format | Looks like |
 |---|---|
-| `1, 1.1, 1.1.1` | 1, then 1.1, then 1.1.1, then 1.1.1.1 |
-| `1., 1.1., 1.1.1.` | Same with a trailing dot at every level |
-| `1.0, 1.1, 1.1.1` | Top level shows as 1.0, common in specifications |
-| `Chapter 1, 1.1, 1.1.1` | Word "Chapter" before the top level number |
-| `Section 1, 1.1, 1.1.1` | Word "Section" before the top level number |
-| `I., A., 1., a.` | Classic outline, each level shows only its own counter |
+| `1, 1.1, 1.1.1` | 1, 1.1, 1.1.1, 1.1.1.1 |
+| `1., 1.1., 1.1.1.` | Same, with a trailing dot |
+| `1.0, 1.1, 1.1.1` | Top level shows as 1.0 |
+| `Chapter 1, 1.1, 1.1.1` | "Chapter" before the top number |
+| `Section 1, 1.1, 1.1.1` | "Section" before the top number |
+| `I., A., 1., a.` | Classic outline |
 
-**Levels numbered** stops numbering below a chosen level, so you can number
-Heading 1 and 2 while leaving Heading 3 and 4 plain.
-
-**Gap after number** is the separator between the number and the heading text,
-either a tab, a single space, or nothing.
-
-**Indent by level** steps each level in by a quarter inch with a hanging indent.
-Leave it off to keep every heading flush with the left margin.
+- **Levels numbered** — stop numbering below a level, e.g. number Heading 1 and
+  2 only.
+- **Gap after number** — tab, space or nothing.
+- **Indent by level** — step each level in. Off keeps headings flush left.
 
 ### Starter outlines
 
-Choosing an outline type adds empty Heading 1 sections so you can start writing
-straight away:
+Adds empty Heading 1 sections so you can start writing:
 
-- **Proposal** — executive summary through to commercial terms
+- **Proposal** — executive summary to commercial terms
 - **Report** — introduction, method, results, discussion, conclusions
-- **Software usage guide** — installation, getting started, feature reference,
-  troubleshooting
-- **Study guide** — objectives, key concepts, worked examples, practice questions
-- **Technical specification** — scope, definitions, functional and non functional
-  requirements, interfaces, verification
+- **Software usage guide** — installation, getting started, feature reference
+- **Study guide** — objectives, key concepts, examples, practice questions
+- **Technical specification** — scope, definitions, requirements, interfaces
 
----
+### Units
 
-## Units
-
-| Unit | Where | Conversion |
+| Unit | Used for | Conversion |
 |---|---|---|
 | Points (pt) | Font sizes | 1 pt = 1/72 inch |
-| Twips | Spacing, indents, margins | 1440 twips = 1 inch, 567 twips = 1 cm, 20 twips = 1 pt |
-| Lines | Line spacing | 1.15 is the common default, 1.5 for double spaced feel |
+| Twips | Spacing, indents, margins | 1440 = 1 inch, 567 = 1 cm, 20 = 1 pt |
+| Lines | Line spacing | 1.15 is a common default |
 
-Useful spacing values: 120 twips is a small gap, 240 is one line at 12 pt, 360 is
-generous.
-
----
-
-## Using the generated template in Word
-
-Double clicking a `.dotx` opens a **new document based on it** rather than
-editing the template. That is the point of a template. To edit the template
-itself, open Word first, then File, Open, and select the `.dotx`.
-
-To install it so it shows up under File, New:
-
-- **Windows:** copy it to
-  `%APPDATA%\Microsoft\Templates`
-- **macOS:** copy it to
-  `~/Library/Group Containers/UBF8T346G9.Office/User Content/Templates`
-
-### The table of contents
-
-The contents page holds a live Word field. Word is told to update fields on
-open, so most of the time it fills in by itself. If it does not, right click the
-contents list and choose Update Field, then Update entire table.
-
-The list picks up anything styled Heading 1 to Heading 4.
-
-### Applying styles
-
-Open the Styles panel with `Ctrl+Alt+Shift+S` on Windows or
-`Cmd+Alt+Shift+S` on macOS. The styles you configured appear as
-Heading 1 to 4, Body Text, Caption, Quote, List Bullet and List Bullet 2.
-
-Keyboard shortcuts: `Ctrl+Alt+1`, `Ctrl+Alt+2`, `Ctrl+Alt+3` for the first three
-heading levels.
+Handy twips values: 120 small gap, 240 one line at 12 pt, 360 generous.
 
 ---
 
-## File map
+## 6. Send feedback
 
-```
-dotx_studio/
-├── app.py                 Flask server, field schema, folder dialog, routes
-├── template_builder.py    Config to .dotx engine
-├── config.json            Current settings, rewritten on each generate
-├── presets.json           Named style sets shown in the preset dropdown
-├── templates/
-│   └── index.html         The GUI, one file, no build step
-├── requirements.txt
-├── run.bat                Windows launcher
-├── run.sh                 macOS and Linux launcher, sets up .venv
-└── .venv/                 Created on first run by run.sh, safe to delete
-```
+1. Click **Feedback** at the top of the page.
+2. Answer the questions.
+3. Click **Save feedback**. It writes a text file to `feedback/`.
+4. Click **Open email** and send it.
+
+Nothing is sent until you send it. If `mailto:` does not work on your machine,
+use **Copy to clipboard** or **Open feedback folder** and email the file to
+`contact@v-embed.com` with the subject `Feedback - Dotx Studio v0.2`.
 
 ---
 
-## Extending it
+## 7. Use the template in Word
 
-### Add a preset
+- Double click the `.dotx` — Word opens a **new document** based on it. That is
+  what a template does.
+- To edit the template itself: open Word first, then File → Open.
+- To get it under File → New, copy it to:
+  - Windows: `%APPDATA%\Microsoft\Templates`
+  - macOS: `~/Library/Group Containers/UBF8T346G9.Office/User Content/Templates`
 
-Add an entry to `presets.json`. It only needs the keys you want to override, and
-they are merged over the current settings:
+**Contents page.** It is a live Word field and usually fills in on open. If not,
+right click it → Update Field → Update entire table. It picks up Heading 1 to 4.
 
-```json
-"My Brand": {
-  "styles": {
-    "headings": {
-      "heading_1": {"font": "Arial", "fontSize": 24, "color": "8B0000"}
-    }
-  }
-}
-```
-
-It appears in the dropdown the next time you reload the page.
-
-### Add a control
-
-Every control in the GUI comes from the `SCHEMA` list in `app.py`. Add a field
-and it appears in the form, wired to the config and to the preview. For example,
-to expose Heading 1 underlining:
-
-```python
-{"path": "styles.headings.heading_1.underline", "label": "Underline",
- "type": "bool"},
-```
-
-Field types are `text`, `number`, `color`, `bool` and `select`. Number fields
-accept `min`, `max`, `step` and `unit`. Select fields take `options` as a list of
-strings, or a list of `[value, label]` pairs.
-
-Then read the new key in `template_builder.py`.
-
-### Add a starter outline
-
-Add a list to the `outlines` dictionary in `_add_outline`, then add the matching
-option to the `document.outline_type` field in `app.py`.
+**Styles panel.** `Ctrl+Alt+Shift+S` (Windows) or `Cmd+Alt+Shift+S` (macOS).
+Your styles appear as Heading 1 to 4, Body Text, Caption, Quote, List Bullet and
+List Bullet 2. Shortcuts `Ctrl+Alt+1/2/3` apply the first three heading levels.
 
 ---
 
-## Generating without the GUI
+## 8. Use it from a script
 
-The engine works on its own, which is useful in scripts and build pipelines:
+The engine runs without the GUI, for build pipelines or batch jobs:
 
 ```python
 import json
@@ -241,34 +206,112 @@ build_template(config, "output/Report_Template.dotx")
 
 ---
 
-## Notes
+## 9. Customising
 
-- The generated file is a true template. The main document part declares the
-  Word template content type, so Word treats it as a template rather than a
-  document with a renamed extension.
-- Built in Word styles bind their fonts and colours to the document theme. The
-  builder strips those theme references before writing your values, otherwise
-  the theme would override them.
-- Fonts must be installed on the machine where the document is opened. Sticking
-  to fonts that ship with Office avoids substitution.
+**Add a preset** — add an entry to `presets.json`. Only the keys you want to
+override; they merge over the current settings.
+
+```json
+"My Brand": {
+  "styles": {
+    "headings": {
+      "heading_1": {"font": "Arial", "fontSize": 24, "color": "8B0000"}
+    }
+  }
+}
+```
+
+**Add a control** — add a field to the `SCHEMA` list in `app.py`. It appears in
+the form, wired to the config and the preview.
+
+```python
+{"path": "styles.headings.heading_1.underline", "label": "Underline",
+ "type": "bool"},
+```
+
+Types: `text`, `number`, `color`, `bool`, `select`. Then read the new key in
+`template_builder.py`.
+
+**Add a starter outline** — add a list to `outlines` in `_add_outline`, then add
+the matching option to `document.outline_type` in `app.py`.
+
+**Add a feedback question** — add an entry to `FEEDBACK_QUESTIONS` in `app.py`.
+It appears on the page and in the saved file.
 
 ---
 
-## Troubleshooting
+## 10. Files
 
-**The Browse button says the dialog is not available.**
-The folder dialog needs `tkinter`. On Debian and Ubuntu install it with
-`sudo apt install python3-tk`. On Windows and macOS it ships with Python. You
-can always type the path into the box instead.
+```
+app.py                 Server, settings schema, feedback questions, routes
+template_builder.py    Settings  ->  .dotx
+template_reader.py     .dotx  ->  settings
+config.json            Current settings, rewritten on each generate
+presets.json           Named style sets for the dropdown
+templates/index.html   The main page
+templates/feedback.html The feedback page
+feedback/              Saved feedback, contents gitignored
+run.sh                 Sets up .venv and starts the server
+pyproject.toml         Dependencies
+uv.lock                Pinned versions
+requirements.txt       Exported from uv.lock for the pip path
+HOW_TO_USE.txt         Plain text instructions for testers
+CHANGELOG.md           What changed in each version
+```
 
-**Port 5000 is already in use.**
-On macOS this is usually AirPlay Receiver. Turn it off in System Settings, or
-change the port on the last line of `app.py`.
+---
 
-**Colours look wrong in Word.**
-Check the hex value is six characters with no `#`. The colour swatch keeps this
-correct for you.
+## 11. Troubleshooting
 
-**A bullet shows as a hollow box.**
-The chosen font does not contain that glyph. Pick a different bullet, or set the
-bullet font to one that has it.
+| Problem | Fix |
+|---|---|
+| Browse button says the dialog is unavailable | `tkinter` is missing. Install it, or type the path in the box. |
+| Port 5000 already in use | `ss -ltnp \| grep :5000` to find it. Or change `PORT` in `app.py`. On macOS it is usually AirPlay Receiver. |
+| Browser does not open | Open `http://127.0.0.1:5000` yourself. |
+| Colours look wrong in Word | Hex must be six characters, no `#`. |
+| A bullet shows as a hollow box | That font lacks the glyph. Pick another bullet or font. |
+| Loading a template changed almost nothing | Its styles use the Word theme instead of explicit values, so there is nothing to read. Check the green panel. |
+| Loading a template fails | Only `.dotx` and `.docx` work. Save `.doc`/`.dot` as `.dotx` in Word first. |
+| Open email button does nothing | No `mailto:` handler. Attach the saved file from `feedback/` yourself. |
+| Buttons stop working | Reload the page. The page gets a one-time token at load. |
+
+---
+
+## 12. Notes
+
+- The output is a real template. The file declares the Word template content
+  type, not just a renamed `.docx`.
+- Word's built-in styles tie fonts and colours to the document theme. The
+  builder strips those references first, or the theme would win.
+- Fonts must be installed on whatever machine opens the document.
+
+### Server security
+
+The server listens on `127.0.0.1` only, but that alone protects nothing: any
+page open in your browser can reach `127.0.0.1`. Three checks close that off.
+
+- **CSRF token** — every request that changes something must carry one. It is
+  generated per run and given only to the real page.
+- **Host check** — the `Host` header must match. This stops DNS rebinding.
+- **JSON only** — bodies are parsed as strict JSON, so a cross-origin form POST
+  is refused before it reaches a handler.
+
+`/api/import` is the one exception to the JSON rule, because uploads are
+multipart. The CSRF check still covers it. Uploads are capped at 16 MB.
+
+`/api/file` serves only templates this run generated, never an arbitrary path.
+`/api/open-folder` only opens folders the app has written to.
+
+None of this stops local programs. Anything already running as you can read the
+page and take the token. It defends against other websites, not against software
+you installed.
+
+---
+
+## Versioning
+
+Version numbers track deliveries, **not** Semantic Versioning. In `x.y.z`: `x`
+counts production releases, `y` counts test rounds delivered, `z` is a small
+fix.
+
+Work happens on `develop`. `master` is what you clone to run it.
