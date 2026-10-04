@@ -83,6 +83,29 @@ Requires Python 3.9 or newer.
 
 ---
 
+### A Windows executable
+
+To hand the tool to someone who has no Python at all, build a single `.exe`:
+
+```powershell
+.\build_windows_exe.ps1
+```
+
+The script makes an isolated `.build-venv`, installs PyInstaller, Flask and
+python-docx into it, and builds `dist\TemplateStudio.exe` — about 18 MB, with
+Python, both HTML pages and the shipped defaults inside it. It needs Python on
+the machine doing the build; the machine that *runs* the exe needs nothing.
+
+Double click the exe and it starts the server and opens the browser, exactly as
+`run.bat` does. Put it in a folder you can write to, because `config.json`,
+`presets.json` and `feedback/` are written **next to the exe** — see `FROZEN`
+in `app.py` for why. Closing the console window stops the server.
+
+`TemplateStudio.spec` holds the build definition. `build/`, `dist/`,
+`.build-venv/` and `*.exe` are gitignored; the spec and the script are not.
+
+---
+
 ## Using it
 
 1. **Pick a preset** from the dropdown at the top right, or start from the
@@ -269,6 +292,8 @@ heading levels.
 ```
 dotx_studio/
 ├── app.py                 Flask server, field schema, feedback questions, routes
+├── TemplateStudio.spec    PyInstaller definition for the Windows exe
+├── build_windows_exe.ps1  Builds dist\TemplateStudio.exe in an isolated venv
 ├── template_builder.py    Config to .dotx engine
 ├── template_reader.py     .dotx back to config, the inverse within limits
 ├── config.json            Current settings, rewritten on each generate

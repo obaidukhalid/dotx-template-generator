@@ -229,3 +229,13 @@ feedback/*
 #   Generated templates, if anyone saves one into the project folder.
 *.dotx
 *.dotm
+
+#   Windows executable build. The spec and the build script are tracked; the
+#   18 MB exe and PyInstaller's scratch directories are not. The Python
+#   template above ignores *.spec as generated output; ours is hand written
+#   and is the build definition, so it is kept.
+.build-venv/
+build/
+dist/
+*.exe
+!TemplateStudio.spec

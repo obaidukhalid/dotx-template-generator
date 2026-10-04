@@ -61,6 +61,38 @@ box.
   both the page and the saved file, the same way `SCHEMA` drives the builder.
 - `feedback/` is tracked but its contents are not. Feedback is the user's.
 
+### Windows executable
+
+`build_windows_exe.ps1` and `TemplateStudio.spec` build
+`dist\TemplateStudio.exe`, a single ~18 MB file carrying Python, Flask,
+python-docx, both HTML pages and the shipped defaults, so the tool can be
+handed to someone with no Python installed.
+
+Three things had to change in `app.py` for it to survive being frozen:
+
+- Read-only resources now come from `BUNDLE_DIR` (PyInstaller's temporary
+  extraction folder) while everything the app writes goes to `APP_DIR` (the
+  folder holding the `.exe`). Writing into the bundle would have meant settings
+  and feedback vanishing the moment the app closed. `config.json` and
+  `presets.json` are seeded next to the `.exe` on first run and never
+  overwritten; both loaders fall back to the bundled defaults when the
+  writable copy is missing, which is what happens if the `.exe` is run from
+  somewhere read-only.
+- Flask's template folder is pointed at the bundle explicitly.
+- The folder dialog ran as `sys.executable -c <script>`, which frozen would
+  have relaunched the whole app instead of showing a dialog. The frozen build
+  re-runs itself with a `--pick-folder` flag instead, keeping the dialog in its
+  own process — the original point of the design, since Tk owns the thread it
+  is created on and would otherwise block Flask.
+
+Startup also now reports where settings are saved, and a port clash prints an
+explanation and holds the console window open rather than closing on a
+traceback nobody can read.
+
+Verified by running the built `.exe` from a folder containing nothing else:
+it seeded its settings, served both pages, generated a template, read that
+template back in, saved feedback, and rejected a request with no CSRF token.
+
 ### Documentation
 
 - `HOW_TO_USE.txt` in the project root: how to start the tool, how to build a
