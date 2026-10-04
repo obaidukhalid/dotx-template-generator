@@ -15,9 +15,29 @@ your own computer, and no part of it talks to the internet.
  1. GETTING IT RUNNING
 -------------------------------------------------------------------------------
 
+WINDOWS - THE EASY WAY
+
+  Double click  TemplateStudio.exe
+
+  Nothing to install. A console window opens and stays open while the tool
+  runs; closing it stops the tool.
+
+  Keep the .exe in a folder you can write to - Desktop or Documents is fine.
+  It saves your settings and your feedback beside itself, so do not run it
+  from inside a zip or from Program Files.
+
+  You need a browser installed (Firefox, Chrome or Edge).
+
+  Windows may say "Windows protected your PC". The file is not code-signed,
+  which costs money. Click "More info", then "Run anyway".
+
+  Skip the rest of this section; go to section 2.
+
+
+LINUX OR MACOS - FROM THE SOURCE CODE
+
 You need:
 
-  - Linux or macOS
   - Python 3.9 or newer
   - git
   - A browser (Firefox, Chrome or Edge)

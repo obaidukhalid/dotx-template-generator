@@ -230,3 +230,9 @@ feedback/*
 *.dotx
 *.dotm
 
+
+#   PyInstaller output from build_windows_exe.ps1 on this branch.
+.build-venv/
+build/
+dist/
+*.exe

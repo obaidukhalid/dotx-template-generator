@@ -53,6 +53,38 @@ python app.py
 
 ---
 
+## 2b. Build the Windows .exe
+
+Only on this branch (`feature/windows-exe`). `master` and `develop` do not
+carry it.
+
+**Must be run on Windows.** PyInstaller bundles the interpreter of the machine
+it runs on, so a Linux clone cannot produce a Windows exe.
+
+On a Windows machine with Python installed:
+
+```powershell
+git clone git@github.com:obaidukhalid/dotx-template-generator.git
+cd dotx-template-generator
+git checkout feature/windows-exe
+.\build_windows_exe.ps1
+```
+
+Result: `dist\TemplateStudio.exe`, about 18 MB. It needs no Python on whatever
+machine runs it.
+
+- The script makes its own `.build-venv`, so your `.venv` is untouched.
+- PowerShell may block the script. Run it as
+  `powershell -File .\build_windows_exe.ps1`.
+- Put the exe in a writable folder. `config.json`, `presets.json` and
+  `feedback/` are written **next to the exe**.
+- It is not code-signed, so SmartScreen will warn: More info → Run anyway.
+
+`TemplateStudio.spec` is the build definition. The `FROZEN` section in `app.py`
+is what makes the exe find its files and keep its settings.
+
+---
+
 ## 3. Make a template
 
 1. Choose a preset from the dropdown, or start from the current settings.
