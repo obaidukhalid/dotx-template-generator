@@ -218,3 +218,14 @@ __marimo__/
 .streamlit/secrets.toml
 
 .claude/settings.local.json
+
+# Template Studio
+#   Feedback a user writes on the Feedback page is theirs, not part of the
+#   project. The folder is tracked so the app has somewhere to write; the
+#   files inside it are not.
+feedback/*
+!feedback/.gitkeep
+
+#   Generated templates, if anyone saves one into the project folder.
+*.dotx
+*.dotm

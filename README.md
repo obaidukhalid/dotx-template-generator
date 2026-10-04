@@ -1,10 +1,18 @@
 # Template Studio
 
+**v0.2**
+
 A local web GUI that turns styling settings into a real Word template (`.dotx`).
 
 Set your fonts, sizes, colours, spacing and bullets in the browser, watch the live
 preview update, pick a folder, click Generate. The template is written straight to
 disk and you can open the containing folder from the same screen.
+
+New in v0.2: load an existing `.dotx` or `.docx` to read its styling back into
+the form and restyle it, and a Feedback page that writes a report you can email
+back. See [CHANGELOG.md](CHANGELOG.md) for the detail, and
+[HOW_TO_USE.txt](HOW_TO_USE.txt) for the version written for people who are not
+going to read this file.
 
 ---
 
@@ -90,6 +98,67 @@ Requires Python 3.9 or newer.
 Your settings are saved to `config.json` each time you generate, so the next
 launch picks up where you left off. `Reload saved config` discards unsaved
 changes on screen.
+
+---
+
+## Updating a template you already have
+
+`Load existing template…` in the header takes a `.dotx` or `.docx`, reads the
+styling out of it and fills in every control on the page. Adjust what you want
+and generate. The file name is pre-filled as `<name>_restyled.dotx`, and the
+file you loaded is never written to.
+
+The import panel that appears lists what was read out of your file and what was
+left at the settings already on screen. Read it — it is the only honest account
+of what came across.
+
+### What carries over
+
+Heading 1 to 4, body text, caption, quote block, both bullet levels (including
+the glyph and indent), the contents list heading and entries, page size,
+orientation, margins, the default font, heading numbering (scheme, number of
+levels, the gap after the number, whether levels indent), whether the template
+has a cover page, contents page or style guide, which starter outline it used,
+the cover placeholder text, the page header text, whether the footer carries a
+page number, and the template name, description and author.
+
+### What does not
+
+Anything the config has no field for: custom styles, Heading 5 and beyond,
+table styles, numbered-list styles other than the two bullet levels, images,
+and the document's own text.
+
+This is a deliberate limit, not an oversight. `Generate` always builds a fresh
+template from the settings on screen through the same `build_template` path as
+any other template; it does not edit the package you uploaded, so the parts it
+cannot describe are not preserved. If you need those, keep working from the
+original file in Word.
+
+Inline text styles are also not read back, because the builder applies them as
+direct run formatting in the style guide rather than as character styles, so
+there is nothing in the file to read them from.
+
+The old binary `.doc` and `.dot` formats cannot be read at all. Open them in
+Word and save as `.dotx` first.
+
+---
+
+## Feedback
+
+`Feedback` in the header opens a short form: six ratings, one question about
+which part needs the most work, and a free text box.
+
+`Save feedback` writes `feedback/feedback_<timestamp>.txt` in the app folder.
+Nothing is transmitted by the app. `Open email` then hands the file's contents
+to your mail program, addressed to `contact@v-embed.com` with the subject
+`Feedback - Dotx Studio v0.2`; `Copy to clipboard` and `Open feedback folder`
+are there for when `mailto` is not wired up on the machine.
+
+The questions are one list, `FEEDBACK_QUESTIONS` in `app.py`, and drive both
+the page and the saved file. Add an entry and it appears in both.
+
+`feedback/` is tracked so the app has somewhere to write; its contents are
+gitignored.
 
 ---
 
@@ -199,12 +268,17 @@ heading levels.
 
 ```
 dotx_studio/
-├── app.py                 Flask server, field schema, folder dialog, routes
+├── app.py                 Flask server, field schema, feedback questions, routes
 ├── template_builder.py    Config to .dotx engine
+├── template_reader.py     .dotx back to config, the inverse within limits
 ├── config.json            Current settings, rewritten on each generate
 ├── presets.json           Named style sets shown in the preset dropdown
 ├── templates/
-│   └── index.html         The GUI, one file, no build step
+│   ├── index.html         The builder GUI, one file, no build step
+│   └── feedback.html      The feedback page, rendered from FEEDBACK_QUESTIONS
+├── feedback/              Where saved feedback lands, contents gitignored
+├── HOW_TO_USE.txt         Plain text instructions for whoever you hand this to
+├── CHANGELOG.md           What changed in each version
 ├── pyproject.toml         Project metadata and dependency declarations
 ├── uv.lock                Exact resolved versions, committed for reproducibility
 ├── requirements.txt       Generated from uv.lock for the non-uv path
@@ -302,6 +376,11 @@ you ever call the API yourself.
   that crosses origins without a preflight — is refused before it reaches a
   handler, so `Content-Type: application/json` is required.
 
+`/api/import` is the single exception to the JSON rule, because a file upload
+has to be multipart. The CSRF check still covers it: a cross-origin form post
+cannot set `X-CSRF-Token`, and setting it is what forces a preflight this server
+never answers. Uploads are capped at 16 MB.
+
 Two consequences for the file endpoints. `/api/file` only serves templates that
 this run of the app generated, never an arbitrary path, so it cannot be turned
 into a way to read your disk. `/api/open-folder` likewise only opens folders the
@@ -332,3 +411,20 @@ correct for you.
 **A bullet shows as a hollow box.**
 The chosen font does not contain that glyph. Pick a different bullet, or set the
 bullet font to one that has it.
+
+**Loading a template left most settings unchanged.**
+Check the import panel's second column. A file whose styles bind their fonts
+and colours to the document theme rather than setting them explicitly has
+nothing for the reader to pick up, so those fields keep the values that were
+already loaded. Files this tool generated itself round trip completely, because
+the builder writes explicit values and strips the theme references.
+
+**Loading a template says it cannot be read.**
+Only `.dotx` and `.docx` work. The binary `.doc` and `.dot` formats are a
+different file format entirely — open them in Word and save as `.dotx`.
+
+**The Open email button does nothing.**
+Nothing is registered to handle `mailto:` on that machine. The feedback is
+already saved as a file; use `Open feedback folder` and attach it to an email
+yourself, to `contact@v-embed.com` with the subject
+`Feedback - Dotx Studio v0.2`.

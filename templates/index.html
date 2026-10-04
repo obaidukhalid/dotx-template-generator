@@ -184,6 +184,42 @@
     padding: 1px 5px; border-radius: 3px;
   }
 
+  header .navlink {
+    color: var(--white); text-decoration: none; font-size: 13px;
+    font-weight: 600; padding: 8px 12px; border-radius: 6px;
+    border: 1px solid var(--dark3);
+  }
+  header .navlink:hover { background: var(--dark2); }
+
+  /* import report */
+  #import-report {
+    margin: 16px 24px 0; padding: 12px 16px 4px;
+    background: var(--green-light); border: 1px solid var(--green-mid);
+    border-radius: 8px; font-size: 12.5px;
+  }
+  #import-report .ir-head {
+    display: flex; align-items: center; gap: 10px; margin-bottom: 8px;
+  }
+  #import-report .ir-head strong { flex: 1; font-size: 13px; }
+  #import-report .ir-close {
+    background: transparent; border: none; font-size: 18px; line-height: 1;
+    color: var(--muted); padding: 0 4px;
+  }
+  #import-report .ir-cols {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: 4px 24px;
+  }
+  #import-report .ir-label {
+    font-weight: 600; color: var(--dark3); font-size: 11.5px;
+    text-transform: uppercase; letter-spacing: .3px;
+  }
+  #import-report .ir-label.ok { color: var(--green); }
+  #import-report ul { margin: 4px 0 8px; padding-left: 20px; }
+  #import-report li { margin: 1px 0; }
+  #import-report .ir-note {
+    margin: 4px 0 8px; color: var(--muted); max-width: 70ch;
+  }
+
   @media (max-width: 1180px) {
     .layout { grid-template-columns: 1fr; }
     nav, aside.preview { position: static; }
@@ -194,13 +230,35 @@
 
 <header>
   <h1>Template Studio</h1>
-  <span class="tag">.dotx generator</span>
+  <span class="tag">v{{ version }}</span>
   <div class="spacer"></div>
+  <a class="navlink" href="/feedback">Feedback</a>
+  <input type="file" id="import-file" accept=".dotx,.docx,.dotm,.docm" hidden>
+  <button class="ghost" id="btn-import" style="border-color:#3a506b">Load existing template…</button>
   <select id="preset">
     <option value="">Apply a preset…</option>
   </select>
   <button class="ghost" id="btn-reset" style="border-color:#3a506b">Reload saved config</button>
 </header>
+
+<!-- What the import recovered, and what it could not. Hidden until a file is
+     loaded, because there is nothing honest to say before then. -->
+<div id="import-report" hidden>
+  <div class="ir-head">
+    <strong>Loaded <span id="ir-source"></span></strong>
+    <button class="ir-close" id="ir-close" title="Dismiss">&times;</button>
+  </div>
+  <div class="ir-cols">
+    <div><span class="ir-label ok">Read from your file</span><ul id="ir-imported"></ul></div>
+    <div><span class="ir-label">Left at the current settings</span><ul id="ir-defaulted"></ul></div>
+  </div>
+  <p class="ir-note">
+    Only the settings this tool can describe are read back. Custom styles,
+    headings past level 4, table styles and the document text itself are not
+    carried over &mdash; Generate writes a fresh template from the settings
+    above.
+  </p>
+</div>
 
 <div class="layout">
   <nav id="nav"></nav>
@@ -275,13 +333,22 @@ function buildField(field) {
 
   } else if (field.type === 'select') {
     const select = document.createElement('select');
+    let matched = false;
     field.options.forEach(opt => {
       const [val, text] = Array.isArray(opt) ? opt : [opt, opt];
       const option = document.createElement('option');
       option.value = val; option.textContent = text;
-      if (String(val) === String(value)) option.selected = true;
+      if (String(val) === String(value)) { option.selected = true; matched = true; }
       select.appendChild(option);
     });
+    // A loaded template can carry a font or a bullet glyph that is not on our
+    // list. Keep it rather than silently snapping the setting to option one.
+    if (!matched && value !== undefined && value !== null && value !== '') {
+      const option = document.createElement('option');
+      option.value = value; option.textContent = value + '  (from file)';
+      option.selected = true;
+      select.insertBefore(option, select.firstChild);
+    }
     select.onchange = () => { setPath(CONFIG, field.path, select.value); refreshPreview(); };
     wrap.appendChild(select);
 
@@ -564,6 +631,78 @@ document.getElementById('preset').onchange = async event => {
 };
 
 document.getElementById('btn-reset').onclick = () => bootstrap(true);
+
+// ---------- load an existing template ----------
+document.getElementById('btn-import').onclick =
+  () => document.getElementById('import-file').click();
+
+document.getElementById('ir-close').onclick =
+  () => document.getElementById('import-report').hidden = true;
+
+document.getElementById('import-file').onchange = async event => {
+  const file = event.target.files[0];
+  if (!file) return;
+  // Clear it straight away so choosing the same file twice still fires.
+  event.target.value = '';
+
+  status(`Reading ${escapeHtml(file.name)}…`);
+  const form = new FormData();
+  form.append('file', file);
+
+  let result;
+  try {
+    const response = await fetch('/api/import', {
+      method: 'POST',
+      headers: { 'X-CSRF-Token': CSRF_TOKEN },
+      body: form
+    });
+    result = await response.json();
+  } catch (error) {
+    status('Could not read that file.', 'err');
+    return;
+  }
+
+  if (!result.ok) { status(escapeHtml(result.error), 'err'); return; }
+
+  CONFIG = result.config;
+  renderForm();
+  refreshPreview();
+  showImportReport(result.source, result.report);
+
+  const base = file.name.replace(/\.(dotx|docx|dotm|docm)$/i, '');
+  document.getElementById('filename').value = base + '_restyled.dotx';
+  status(
+    `Loaded the styling from <code>${escapeHtml(file.name)}</code>. ` +
+    `Change what you need, then Generate.`, 'ok');
+};
+
+function showImportReport(source, report) {
+  const box = document.getElementById('import-report');
+  document.getElementById('ir-source').textContent = source;
+
+  const fill = (id, items, emptyText) => {
+    const list = document.getElementById(id);
+    list.innerHTML = '';
+    if (!items || !items.length) {
+      const li = document.createElement('li');
+      li.textContent = emptyText;
+      li.style.color = '#6b7280';
+      list.appendChild(li);
+      return;
+    }
+    items.forEach(item => {
+      const li = document.createElement('li');
+      li.textContent = item;
+      list.appendChild(li);
+    });
+  };
+
+  fill('ir-imported', report.imported, 'Nothing could be read.');
+  fill('ir-defaulted', report.defaulted, 'Everything came from the file.');
+
+  box.hidden = false;
+  box.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
 
 // ---------- start ----------
 async function bootstrap(keepPaths) {

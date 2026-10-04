@@ -1,0 +1,204 @@
+===============================================================================
+ TEMPLATE STUDIO  (Dotx Studio)  -  v0.2
+ How to use the tool, and how to send your feedback back to me
+===============================================================================
+
+Template Studio is a small web app that runs on your own machine. You set the
+fonts, sizes, colours, spacing, bullets and page layout in your browser, watch
+the live preview, and it writes a real Word template file (.dotx) to disk.
+
+Nothing is uploaded anywhere. The app only ever listens on 127.0.0.1, which is
+your own computer, and no part of it talks to the internet.
+
+
+-------------------------------------------------------------------------------
+ 1. STARTING IT
+-------------------------------------------------------------------------------
+
+WINDOWS
+  Double click  run.bat
+
+MAC OR LINUX
+  Open a terminal in this folder and run:
+      ./run.sh
+
+Either way it installs what it needs on the first run, starts the server, and
+opens your browser at:
+
+      http://127.0.0.1:5000
+
+To stop it, press Ctrl+C in the window it is running in, or just close that
+window.
+
+If the browser does not open by itself, type that address in yourself.
+
+
+-------------------------------------------------------------------------------
+ 2. MAKING A TEMPLATE FROM SCRATCH
+-------------------------------------------------------------------------------
+
+  1. Work down the settings in the middle column. The list on the left jumps
+     to each group: template details, document structure, Heading 1 to 4,
+     body text, caption, quote, bullets, contents list, page setup.
+
+  2. The panel on the right updates as you type, so you can see roughly what
+     each change does before you build anything.
+
+  3. "Apply a preset..." at the top loads a complete set of settings you can
+     then adjust, rather than starting from the defaults every time.
+
+  4. At the bottom of the screen, pick the folder to save into and a file
+     name, then press "Generate template".
+
+  5. "Open folder" shows you the file. "Download" saves it through the
+     browser instead.
+
+A note on units. Font sizes are in points. Spacing and margins are in twips,
+because that is what Word stores: 1 inch is 1440 twips and 1 cm is 567 twips.
+
+
+-------------------------------------------------------------------------------
+ 3. UPDATING A TEMPLATE YOU ALREADY HAVE   (new in v0.2)
+-------------------------------------------------------------------------------
+
+If you already have a .dotx (or a .docx), you do not have to retype its
+styling.
+
+  1. Press "Load existing template..." at the top of the page.
+
+  2. Choose your file. The tool reads the styling out of it and fills every
+     setting on the page in, so the form now describes your existing template.
+
+  3. A green panel appears listing two things:
+       - what was read out of your file
+       - what was left at the settings that were already loaded, because your
+         file did not define it
+
+     Read that panel. It is the honest account of what came across.
+
+  4. Change whatever you want, exactly as you would for a new template.
+
+  5. Press "Generate template". The file name is pre-filled as
+     <your file>_restyled.dotx so you do not overwrite the original by
+     accident. Change it if you want to.
+
+WHAT CARRIES OVER, AND WHAT DOES NOT
+
+  Carried over:
+      Heading 1 to 4, body text, caption, quote block, both bullet levels,
+      the contents list heading and entries, page size, orientation, margins,
+      the default font, heading numbering (scheme, how many levels, the gap
+      after the number, indenting), whether there is a cover page, a contents
+      page or a style guide, the cover placeholder text, the page header
+      text, whether there is a page number in the footer, and the template
+      name, description and author.
+
+  NOT carried over:
+      Anything the tool has no setting for. That means custom styles you
+      created yourself, Heading 5 and beyond, table styles, numbered-list
+      styles other than the two bullet levels, images, and the actual text
+      and content of the document.
+
+  This matters: Generate always writes a FRESH template built from the
+  settings on the page. It does not edit your original file and it does not
+  preserve the parts it cannot describe. Your original file is never touched
+  or modified in any way, so keep it until you are happy with the new one.
+
+  Two formats cannot be read at all: the old binary .doc and .dot. Open those
+  in Word and save them as .dotx first.
+
+
+-------------------------------------------------------------------------------
+ 4. USING THE TEMPLATE IN WORD
+-------------------------------------------------------------------------------
+
+  - Double click the .dotx and Word opens a NEW document based on it, which
+    is what a template is for. To edit the template itself, right click it and
+    choose Open.
+
+  - To make it available under File > New, put it in your Word templates
+    folder:
+        Windows:  %APPDATA%\Microsoft\Templates
+        Mac:      ~/Library/Group Containers/UBF8T346G9.Office/User Content/Templates
+
+  - The contents list is a live Word field, not fixed text. It fills in when
+    the field is updated. The template asks Word to refresh fields on open; if
+    it still looks empty, right click it and choose Update Field.
+
+  - Heading numbers are a real multilevel list, so Word keeps them in
+    sequence by itself as you add, move and delete sections.
+
+  - The style guide section is there to show you every style in one place.
+    Delete it once you start writing.
+
+
+-------------------------------------------------------------------------------
+ 5. SENDING ME YOUR FEEDBACK      <<< please do this
+-------------------------------------------------------------------------------
+
+This is the part I actually need from you. The tool is at v0.2 and what gets
+built next depends on what you tell me.
+
+  1. Click "Feedback" at the top right of the app.
+
+  2. Answer the six rating questions, say which part needs the most work, and
+     write whatever you like in the box at the bottom. Specifics help far more
+     than scores: what you were trying to do, what got in the way, what you
+     expected instead.
+
+  3. Press "Save feedback". That writes a plain text file into:
+
+         feedback/        (a folder right next to this file)
+
+     named feedback_YYYY-MM-DD_HHMMSS.txt. Nothing is sent anywhere at this
+     point - it is just a file on your disk, and you are welcome to open it
+     and read exactly what you are about to send.
+
+  4. Press "Open email to contact@v-embed.com". Your mail program opens with
+     the address and the subject line already filled in, and your feedback in
+     the body. Press send.
+
+     If your mail program drops the body because it is long, attach the saved
+     text file instead. "Open feedback folder" takes you straight to it, and
+     "Copy to clipboard" is there if you would rather paste it in by hand.
+
+  5. If none of those buttons work on your setup, just send the file yourself:
+
+         To:       contact@v-embed.com
+         Subject:  Feedback - Dotx Studio v0.2
+         Attach:   the file from the feedback folder
+
+     The subject line matters - it is how I sort these.
+
+You can fill the form in as many times as you like. Each save is a separate
+file, so earlier feedback is never overwritten.
+
+
+-------------------------------------------------------------------------------
+ 6. IF SOMETHING GOES WRONG
+-------------------------------------------------------------------------------
+
+"Port 5000 is already in use"
+    Something else is on that port. Stop it, or change PORT near the top of
+    app.py - the rest of the app follows from it.
+
+"The folder dialog is not available"
+    Your Python has no tkinter. Type the folder path into the box instead, or
+    use the Download button.
+
+The page loads but the buttons do nothing
+    Reload the page. The app hands the page a one-time token at load, and the
+    server rejects anything without it, so a page left open from a previous
+    run of the app will not work.
+
+A font I chose does not appear in Word
+    Word falls back when a font is not installed on the machine opening the
+    document. Pick one you know your readers have.
+
+Anything else
+    Tell me on the Feedback page. That is what it is for.
+
+
+===============================================================================
+ Template Studio v0.2  -  contact@v-embed.com
+===============================================================================

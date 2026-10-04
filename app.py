@@ -10,6 +10,7 @@ Then open http://127.0.0.1:5000 in a browser. The browser opens automatically.
 """
 
 import copy
+import datetime
 import hmac
 import json
 import os
@@ -24,16 +25,28 @@ from urllib.parse import quote
 from flask import Flask, jsonify, request, send_file, render_template
 
 from template_builder import build_template
+from template_reader import TemplateReadError, read_template
+
+APP_VERSION = "0.2"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(APP_DIR, "config.json")
 PRESETS_PATH = os.path.join(APP_DIR, "presets.json")
+FEEDBACK_DIR = os.path.join(APP_DIR, "feedback")
+
+FEEDBACK_EMAIL = "contact@v-embed.com"
+FEEDBACK_SUBJECT = f"Feedback - Dotx Studio v{APP_VERSION}"
 
 HOST = "127.0.0.1"
 PORT = 5000
 
+# An uploaded template is a few tens of kilobytes. The cap is generous for a
+# real .dotx and still small enough that a bad upload cannot exhaust memory.
+MAX_UPLOAD_BYTES = 16 * 1024 * 1024
+
 app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
+app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
 
 # ----------------------------------------------------------------------------
@@ -52,6 +65,11 @@ app.config["JSON_SORT_KEYS"] = False
 #
 # Requests are also parsed as strict JSON, so a form POST — the one shape that
 # crosses origins without a preflight — is rejected before any handler runs.
+#
+# /api/import is the single exception to the JSON rule, because a file upload
+# has to be multipart. Check 3 still covers it: a cross-origin form post cannot
+# set the X-CSRF-Token header, and setting it is what forces a preflight that
+# this server never answers.
 # ----------------------------------------------------------------------------
 
 CSRF_TOKEN = secrets.token_urlsafe(32)
@@ -78,6 +96,17 @@ def is_generated(path):
 
 def deny(message, code=403):
     return jsonify({"ok": False, "error": message}), code
+
+
+@app.errorhandler(413)
+def too_large(_error):
+    """MAX_CONTENT_LENGTH aborts before any handler runs, so answer in the
+    shape the GUI expects rather than with Flask's HTML page."""
+    megabytes = MAX_UPLOAD_BYTES // (1024 * 1024)
+    return jsonify({
+        "ok": False,
+        "error": f"That file is larger than {megabytes} MB.",
+    }), 413
 
 
 @app.before_request
@@ -455,6 +484,111 @@ SCHEMA = [
 
 
 # ----------------------------------------------------------------------------
+# Feedback questions. Like SCHEMA above, this drives the whole feedback page:
+# add a question here and it appears on the page and in the saved file.
+# ----------------------------------------------------------------------------
+
+RATINGS = [
+    [1, "1 - poor"],
+    [2, "2"],
+    [3, "3 - all right"],
+    [4, "4"],
+    [5, "5 - very good"],
+]
+
+FEEDBACK_QUESTIONS = [
+    {"id": "setup", "type": "scale", "options": RATINGS,
+     "question": "How easy was it to install and start the tool?"},
+    {"id": "interface", "type": "scale", "options": RATINGS,
+     "question": "How clear is the interface and the way the settings are "
+                 "grouped?"},
+    {"id": "preview", "type": "scale", "options": RATINGS,
+     "question": "How well does the live preview match what Word actually "
+                 "produces?"},
+    {"id": "output", "type": "scale", "options": RATINGS,
+     "question": "How well does the generated template behave in Word "
+                 "(styles, heading numbers, contents list)?"},
+    {"id": "import", "type": "scale", "options": RATINGS,
+     "question": "How useful is loading an existing template to restyle it?"},
+    {"id": "recommend", "type": "scale", "options": RATINGS,
+     "question": "How likely are you to keep using the tool for real "
+                 "documents?"},
+    {"id": "weakest", "type": "choice",
+     "question": "Which part needs the most work?",
+     "options": [
+         ["setup", "Installing and starting it"],
+         ["interface", "The interface and layout"],
+         ["preview", "The live preview"],
+         ["styles", "The range of styling options"],
+         ["output", "The template Word ends up with"],
+         ["import", "Loading an existing template"],
+         ["docs", "The instructions and documentation"],
+     ]},
+    {"id": "comments", "type": "textarea",
+     "question": "Anything else: what is missing, what got in your way, what "
+                 "you would change."},
+]
+
+
+def conform_feedback(payload):
+    """
+    Reduce a submitted feedback payload to the answers the questions define.
+
+    Nothing from the request reaches the saved file unchecked: a rating has to
+    be one of the offered numbers, a choice one of the offered values, and free
+    text is capped and stripped of control characters.
+    """
+    answers = payload if isinstance(payload, dict) else {}
+    result = {}
+    for item in FEEDBACK_QUESTIONS:
+        raw = answers.get(item["id"])
+        if item["type"] == "scale":
+            allowed = {str(value) for value, _ in item["options"]}
+            result[item["id"]] = str(raw) if str(raw) in allowed else ""
+        elif item["type"] == "choice":
+            allowed = {value for value, _ in item["options"]}
+            result[item["id"]] = raw if raw in allowed else ""
+        else:
+            text = raw if isinstance(raw, str) else ""
+            text = "".join(
+                ch for ch in text if ch in "\r\n\t" or ch >= " "
+            )
+            result[item["id"]] = text.strip()[:4000]
+    return result
+
+
+def feedback_as_text(answers):
+    """Render the answers as the plain text file that gets emailed back."""
+    lines = [
+        FEEDBACK_SUBJECT,
+        "=" * len(FEEDBACK_SUBJECT),
+        "",
+        f"Submitted: {datetime.datetime.now().strftime('%Y-%m-%d %H:%M')}",
+        f"Tool version: {APP_VERSION}",
+        "",
+    ]
+    for item in FEEDBACK_QUESTIONS:
+        value = answers.get(item["id"], "")
+        if item["type"] == "choice":
+            labels = dict(item["options"])
+            value = labels.get(value, value)
+        lines.append(item["question"])
+        if item["type"] == "textarea":
+            lines.append("")
+            lines.append(value or "(no answer)")
+        else:
+            lines.append(f"  {value or '(no answer)'}")
+        lines.append("")
+    lines += [
+        "-" * 70,
+        f"Send this file to {FEEDBACK_EMAIL}",
+        f"with the subject line: {FEEDBACK_SUBJECT}",
+        "",
+    ]
+    return "\n".join(lines)
+
+
+# ----------------------------------------------------------------------------
 # Config helpers
 # ----------------------------------------------------------------------------
 
@@ -550,7 +684,21 @@ def reveal_in_file_manager(path):
 
 @app.route("/")
 def index():
-    return render_template("index.html", csrf_token=CSRF_TOKEN)
+    return render_template(
+        "index.html", csrf_token=CSRF_TOKEN, version=APP_VERSION
+    )
+
+
+@app.route("/feedback")
+def feedback_page():
+    return render_template(
+        "feedback.html",
+        csrf_token=CSRF_TOKEN,
+        version=APP_VERSION,
+        questions=FEEDBACK_QUESTIONS,
+        email=FEEDBACK_EMAIL,
+        subject=FEEDBACK_SUBJECT,
+    )
 
 
 @app.route("/api/bootstrap")
@@ -560,6 +708,7 @@ def api_bootstrap():
         "config": load_config(),
         "presets": load_presets(),
         "output_dir": default_output_dir(),
+        "version": APP_VERSION,
         "tk_available": True,
     })
 
@@ -623,6 +772,91 @@ def api_generate():
         "ok": True,
         "path": output_path,
         "size_kb": round(os.path.getsize(output_path) / 1024, 1),
+    })
+
+
+@app.route("/api/import", methods=["POST"])
+def api_import():
+    """
+    Read an uploaded .dotx or .docx back into a styling config.
+
+    Only the settings the config schema describes are recovered. Custom styles,
+    headings past level 4, table styles and the document's own text have no
+    slot in the config and are dropped, so the report tells the user which
+    groups of settings actually came out of their file.
+
+    This is the one handler that takes a multipart body rather than JSON. The
+    CSRF check in guard_request is what keeps it closed to other origins.
+    """
+    upload = request.files.get("file")
+    if upload is None or not upload.filename:
+        return jsonify({"ok": False, "error": "No file was sent."})
+
+    name = os.path.basename(upload.filename)
+    if not name.lower().endswith((".dotx", ".docx", ".dotm", ".docm")):
+        return jsonify({
+            "ok": False,
+            "error": "Choose a .dotx or .docx file. The older .dot and .doc "
+                     "formats cannot be read.",
+        })
+
+    data = upload.read(MAX_UPLOAD_BYTES + 1)
+    if len(data) > MAX_UPLOAD_BYTES:
+        return jsonify({"ok": False, "error": "That file is too large."})
+
+    try:
+        defaults = load_config()
+    except (OSError, ValueError) as error:
+        return jsonify({"ok": False, "error": f"Cannot read config: {error}"})
+
+    try:
+        config, report = read_template(data, defaults)
+    except TemplateReadError as error:
+        return jsonify({"ok": False, "error": str(error)})
+    except Exception as error:  # surfaced to the user in the GUI
+        return jsonify({
+            "ok": False,
+            "error": f"Could not read that template. {type(error).__name__}: "
+                     f"{error}",
+        })
+
+    # Conform it for the same reason /api/config does: the config drives the
+    # builder and may be written to disk, so it never defines its own shape.
+    config = conform_to(config, defaults)
+
+    return jsonify({
+        "ok": True,
+        "config": config,
+        "report": report,
+        "source": name,
+    })
+
+
+@app.route("/api/feedback", methods=["POST"])
+def api_feedback():
+    """Save a feedback form as a text file under feedback/ in the app folder."""
+    answers = conform_feedback(read_json().get("answers"))
+    text = feedback_as_text(answers)
+
+    stamp = datetime.datetime.now().strftime("%Y-%m-%d_%H%M%S")
+    filename = f"feedback_{stamp}.txt"
+
+    try:
+        os.makedirs(FEEDBACK_DIR, exist_ok=True)
+        path = os.path.join(FEEDBACK_DIR, filename)
+        with open(path, "w", encoding="utf-8") as handle:
+            handle.write(text)
+    except OSError as error:
+        return jsonify({"ok": False, "error": f"Cannot save feedback: {error}"})
+
+    remember_generated(path)
+
+    return jsonify({
+        "ok": True,
+        "path": path,
+        "text": text,
+        "email": FEEDBACK_EMAIL,
+        "subject": FEEDBACK_SUBJECT,
     })
 
 
@@ -709,6 +943,6 @@ def open_browser():
 if __name__ == "__main__":
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
         threading.Timer(1.2, open_browser).start()
-    print(f"\n  Template Studio running at {APP_URL}")
+    print(f"\n  Template Studio v{APP_VERSION} running at {APP_URL}")
     print("  Press Ctrl+C to stop.\n")
     app.run(host=HOST, port=PORT, debug=False)
