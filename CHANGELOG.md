@@ -61,42 +61,16 @@ box.
   both the page and the saved file, the same way `SCHEMA` drives the builder.
 - `feedback/` is tracked but its contents are not. Feedback is the user's.
 
-### Runs from a clone, and survives being frozen
+### Runs from a clone
 
-The project is cloned and run in a Python environment:
-`git clone`, `git checkout develop`, `./run.sh`. The README and
-`HOW_TO_USE.txt` now cover exactly that and nothing else.
+Clone the repo and run `./run.sh`. That is the whole setup. Linux and macOS,
+Python 3.9 or newer.
 
-`app.py` also carries the handful of changes needed to run frozen into a
-single-file executable, which is how the tool gets handed to someone with no
-Python at all. The PyInstaller spec and build script are deliberately **not in
-this repo** — they are Windows-only and would be noise for anyone cloning a
-Python project — so they live on the maintainer's machine and are gitignored.
-The parts that are here:
+Windows support was dropped: `run.bat` and the executable build tooling are
+gone from the repo, and `app.py` no longer carries the path handling a frozen
+build needed.
 
-- Read-only resources come from `BUNDLE_DIR` (PyInstaller's temporary
-  extraction folder) while everything the app writes goes to `APP_DIR` (the
-  folder holding the executable). Writing into the bundle would have meant
-  settings and feedback vanishing the moment the app closed. `config.json` and
-  `presets.json` are seeded beside the executable on first run and never
-  overwritten; both loaders fall back to the bundled defaults when the writable
-  copy is missing, which is what happens if it is run from somewhere
-  read-only. All of this is inert when running from source.
-- Flask's template folder is pointed at the bundle explicitly.
-- The folder dialog ran as `sys.executable -c <script>`, which frozen would
-  have relaunched the whole app instead of showing a dialog. The frozen build
-  re-runs itself with a `--pick-folder` flag instead, keeping the dialog in its
-  own process — the original point of the design, since Tk owns the thread it
-  is created on and would otherwise block Flask.
-
-Startup also now reports where settings are saved, and a port clash prints an
-explanation and holds the window open rather than closing on a traceback
-nobody can read.
-
-Verified both ways: from a source checkout, and as a built executable run from
-a folder containing nothing else, where it seeded its settings, served both
-pages, generated a template, read that template back in, saved feedback, and
-rejected a request with no CSRF token.
+A port clash now prints an explanation instead of a traceback.
 
 ### Documentation
 
@@ -116,9 +90,9 @@ is a genuine ancestor of it. `master` stays the README-only production line.
 `tests-initial` was deleted, locally and on the remote, once every commit on it
 was confirmed present in `develop`.
 
-The Windows build tooling (`TemplateStudio.spec`, `build_windows_exe.ps1`) is
-gitignored rather than tracked, so a clone contains only what a Python
-environment needs.
+The Windows build tooling is gitignored, not tracked, so a clone holds only
+what a Python environment needs. `master` carries the running code, since that
+is the branch testers clone.
 
 ## v0.1
 

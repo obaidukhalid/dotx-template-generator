@@ -15,14 +15,19 @@ your own computer, and no part of it talks to the internet.
  1. GETTING IT RUNNING
 -------------------------------------------------------------------------------
 
-You need a Linux or macOS machine with git and Python 3.9 or newer. Nothing
-else, and nothing gets installed outside the project folder.
+You need:
 
-Open a terminal and run these four lines:
+  - Linux or macOS
+  - Python 3.9 or newer
+  - git
+  - A browser (Firefox, Chrome or Edge)
+
+Nothing gets installed outside the project folder.
+
+Open a terminal and run these three lines:
 
     git clone git@github.com:obaidukhalid/dotx-template-generator.git
     cd dotx-template-generator
-    git checkout develop
     ./run.sh
 
 The last line does all the work. It builds a private Python environment in a
@@ -31,10 +36,7 @@ the server, and opens your browser at:
 
       http://127.0.0.1:5000
 
-If the browser does not open by itself, type that address in yourself. On a
-machine with no desktop - a server you are connected to over SSH, or WSL - it
-cannot open one, and you will see a row of "not found" messages from xdg-open.
-That is harmless; the tool is running. Just open the address yourself.
+If the browser does not open by itself, type that address in yourself.
 
 Later runs are just ./run.sh again, and start immediately.
 
@@ -43,8 +45,6 @@ and try again.
 
 To stop the tool, press Ctrl+C in the terminal it is running in.
 
-Note the "git checkout develop". The code lives on the develop branch; master
-holds only the README.
 
 
 -------------------------------------------------------------------------------

@@ -7,10 +7,6 @@ Run:
     python app.py
 
 Then open http://127.0.0.1:5000 in a browser. The browser opens automatically.
-
-The same file runs frozen as a one-file Windows .exe. See FROZEN below: the
-difference is where resources are read from and where the app is allowed to
-write.
 """
 
 import copy
@@ -20,7 +16,6 @@ import json
 import os
 import platform
 import secrets
-import shutil
 import subprocess
 import sys
 import threading
@@ -34,62 +29,10 @@ from template_reader import TemplateReadError, read_template
 
 APP_VERSION = "0.2"
 
-# ----------------------------------------------------------------------------
-# Where things live
-#
-# Running from source, everything sits in one folder. Frozen into a one-file
-# .exe, the two have to be told apart:
-#
-#   BUNDLE_DIR  the read-only payload PyInstaller unpacks into a temporary
-#               folder on startup and deletes on exit. Templates and the
-#               shipped defaults are read from here.
-#   APP_DIR     the folder the .exe itself sits in. Everything the app writes
-#               goes here, because a file written into BUNDLE_DIR is gone the
-#               moment the app closes, and the user could not find it anyway.
-# ----------------------------------------------------------------------------
-
-FROZEN = getattr(sys, "frozen", False)
-
-if FROZEN:
-    BUNDLE_DIR = sys._MEIPASS
-    APP_DIR = os.path.dirname(os.path.abspath(sys.executable))
-else:
-    BUNDLE_DIR = APP_DIR = os.path.dirname(os.path.abspath(__file__))
-
+APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(APP_DIR, "config.json")
 PRESETS_PATH = os.path.join(APP_DIR, "presets.json")
 FEEDBACK_DIR = os.path.join(APP_DIR, "feedback")
-
-# The defaults that ship inside the bundle, used to seed the writable copies on
-# a first run. Identical to the writable paths when running from source.
-DEFAULT_CONFIG_PATH = os.path.join(BUNDLE_DIR, "config.json")
-DEFAULT_PRESETS_PATH = os.path.join(BUNDLE_DIR, "presets.json")
-
-
-def seed_writable_files():
-    """
-    Put config.json and presets.json next to the .exe on a first run.
-
-    Without this the frozen app would read its settings out of the bundle and
-    write them back to a temporary folder, so every run would start from the
-    shipped defaults. Nothing is overwritten: a file the user already has is
-    left exactly as it is.
-    """
-    if not FROZEN:
-        return
-    for source, target in (
-        (DEFAULT_CONFIG_PATH, CONFIG_PATH),
-        (DEFAULT_PRESETS_PATH, PRESETS_PATH),
-    ):
-        if os.path.exists(target) or not os.path.exists(source):
-            continue
-        try:
-            shutil.copyfile(source, target)
-        except OSError:
-            # Read-only location, e.g. run straight out of Program Files. The
-            # app still works; it just falls back to the bundled defaults and
-            # cannot remember changes.
-            pass
 
 FEEDBACK_EMAIL = "contact@v-embed.com"
 FEEDBACK_SUBJECT = f"Feedback - Dotx Studio v{APP_VERSION}"
@@ -101,7 +44,7 @@ PORT = 5000
 # real .dotx and still small enough that a bad upload cannot exhaust memory.
 MAX_UPLOAD_BYTES = 16 * 1024 * 1024
 
-app = Flask(__name__, template_folder=os.path.join(BUNDLE_DIR, "templates"))
+app = Flask(__name__)
 app.config["JSON_SORT_KEYS"] = False
 app.config["MAX_CONTENT_LENGTH"] = MAX_UPLOAD_BYTES
 
@@ -650,10 +593,6 @@ def feedback_as_text(answers):
 # ----------------------------------------------------------------------------
 
 def load_config(path=CONFIG_PATH):
-    # Falls back to the shipped defaults when the writable copy is missing,
-    # which happens if the frozen app sits somewhere it cannot write to.
-    if not os.path.exists(path) and os.path.exists(DEFAULT_CONFIG_PATH):
-        path = DEFAULT_CONFIG_PATH
     with open(path, "r", encoding="utf-8") as handle:
         return json.load(handle)
 
@@ -664,12 +603,9 @@ def save_config(config, path=CONFIG_PATH):
 
 
 def load_presets():
-    path = PRESETS_PATH
-    if not os.path.exists(path):
-        path = DEFAULT_PRESETS_PATH
-    if not os.path.exists(path):
+    if not os.path.exists(PRESETS_PATH):
         return {}
-    with open(path, "r", encoding="utf-8") as handle:
+    with open(PRESETS_PATH, "r", encoding="utf-8") as handle:
         return json.load(handle)
 
 
@@ -707,33 +643,12 @@ FOLDER_PICKER = (
     "print(path or '')\n"
 )
 
-# Flag the frozen app recognises as "just show the folder dialog and exit".
-# Frozen, sys.executable is the .exe rather than a Python interpreter, so there
-# is no -c to pass the picker script to. Re-running ourselves with this flag
-# keeps the dialog in its own process, which is the point of doing it this way:
-# Tk owns the thread it is created on and would otherwise block Flask.
-PICK_FOLDER_FLAG = "--pick-folder"
-
-
-def run_folder_picker():
-    """Show the dialog, print the chosen path, and return an exit code."""
-    namespace = {}
-    try:
-        exec(FOLDER_PICKER, namespace)  # noqa: S102 - our own literal above
-    except Exception:
-        return 1
-    return 0
-
-
 def pick_folder():
     """Open a native folder dialog. Returns the path, or None if unavailable."""
-    command = (
-        [sys.executable, PICK_FOLDER_FLAG] if FROZEN
-        else [sys.executable, "-c", FOLDER_PICKER]
-    )
     try:
         result = subprocess.run(
-            command, capture_output=True, text=True, timeout=300,
+            [sys.executable, "-c", FOLDER_PICKER],
+            capture_output=True, text=True, timeout=300,
         )
     except Exception:
         return None
@@ -1025,29 +940,17 @@ def open_browser():
 
 
 def main():
-    # The folder dialog re-runs this executable with a flag. Nothing else may
-    # be printed on that path: the parent reads stdout as the chosen path.
-    if FROZEN and len(sys.argv) > 1 and sys.argv[1] == PICK_FOLDER_FLAG:
-        return run_folder_picker()
-
-    seed_writable_files()
-
     if os.environ.get("WERKZEUG_RUN_MAIN") != "true":
         threading.Timer(1.2, open_browser).start()
     print(f"\n  Template Studio v{APP_VERSION} running at {APP_URL}")
-    print(f"  Settings and feedback are saved in {APP_DIR}")
-    print("  Press Ctrl+C to stop, or just close this window.\n")
+    print("  Press Ctrl+C to stop.\n")
     try:
         app.run(host=HOST, port=PORT, debug=False)
     except KeyboardInterrupt:
         pass
     except OSError as error:
-        # Frozen, there is no terminal scrollback to read a traceback out of,
-        # so say what went wrong and hold the window open long enough to read.
         print(f"\n  Could not start the server on port {PORT}: {error}")
         print("  Something else is probably already using that port.")
-        if FROZEN:
-            input("\n  Press Enter to close. ")
         return 1
     return 0
 
