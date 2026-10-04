@@ -39,6 +39,16 @@ If the script is not executable after the clone, `chmod +x run.sh` first.
 
 To stop the server, press `Ctrl+C` in the terminal it is running in.
 
+On a headless box, over SSH, or in WSL, the browser will not open — you will see
+`xdg-open: no method available` and the server carries on regardless. Open
+`http://127.0.0.1:5000` yourself. If the machine running the server is not the
+machine you are browsing from, forward the port rather than changing the bind
+address, which the server's Host check would reject anyway:
+
+```bash
+ssh -L 5000:127.0.0.1:5000 you@the-box
+```
+
 Nothing leaves your machine. The server binds to `127.0.0.1` and the app makes
 no outbound requests of any kind.
 

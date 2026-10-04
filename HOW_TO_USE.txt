@@ -31,7 +31,10 @@ the server, and opens your browser at:
 
       http://127.0.0.1:5000
 
-If the browser does not open by itself, type that address in yourself.
+If the browser does not open by itself, type that address in yourself. On a
+machine with no desktop - a server you are connected to over SSH, or WSL - it
+cannot open one, and you will see a row of "not found" messages from xdg-open.
+That is harmless; the tool is running. Just open the address yourself.
 
 Later runs are just ./run.sh again, and start immediately.
 
