@@ -38,6 +38,45 @@ Supporting changes:
 - The old binary `.doc` and `.dot` formats are rejected with an explanation
   rather than a traceback, as are files that are not Word packages at all.
 
+### Header and footer
+
+Six positions exist in a Word document: left, centre and right in the header,
+and the same three in the footer. Each holds exactly one field, chosen in the
+tool. Claiming a position removes it from every other field's list, and the
+builder refuses to write a template where two switched-on fields want the same
+place rather than dropping one of them.
+
+Placeable: the page number, and six lines of text. Nothing is linked to the
+document body — this is styling for the header and footer, set up once in the
+template.
+
+- `document.header_text` and `document.page_numbers` are gone. Both are
+  ordinary placeable fields under `header_footer` now, so the page number can
+  sit anywhere rather than only in the footer centre.
+- Headers and footers are laid out the way Word does it: one paragraph with a
+  centre and a right tab stop. Tabs are only written when something to their
+  right needs them.
+- "Blank header and footer on page 1" sets Word's Different first page, on by
+  default, so a cover page is not cluttered by a header repeating what it
+  already says.
+- `template_reader` recovers it all: which field is in which position and the
+  first-page setting. Position is read back from the tab count, the same rule
+  the builder writes by. The text fields are interchangeable, so a line of
+  text comes back in position but not necessarily in the numbered field it was
+  typed into.
+
+### Live preview
+
+The preview now shows the cover page as well as the body: the title, subtitle
+and the three placeholder lines, at their configured fonts, sizes, colours and
+spacing, with a marker for the page break. Empty placeholders are left out, the
+same as the builder does. Header and footer strips show what sits in each of
+the six positions.
+
+Verified: every slot combination round trips through build and read with no
+differences, and the preview and position rules are covered by 32 assertions
+run against the shipped page source.
+
 ### Feedback page
 
 A new **Feedback** link in the header opens `/feedback`: six rating questions

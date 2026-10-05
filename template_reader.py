@@ -28,11 +28,13 @@ from docx import Document
 from docx.oxml.ns import qn
 
 from template_builder import (
+    CUSTOM_FIELD_KEYS,
     DOCX_MAIN_CT,
     DOTX_MAIN_CT,
     HEADING_KEYS,
     HEADING_NUMBER_FORMATS,
     PAGE_SIZES,
+    PLACEABLE_KEYS,
 )
 
 # Sections of a cover page, in the order _add_cover writes them.
@@ -465,6 +467,22 @@ def _instr_texts(doc):
     return texts
 
 
+def _paragraph_text(paragraph):
+    """
+    All the text in a paragraph, including text inside content controls.
+
+    python-docx's Paragraph.text only walks direct w:r children. A file made
+    elsewhere may well put a cover line inside a content control, and that
+    line would otherwise read as empty and shift every placeholder after it
+    up by one.
+    """
+    parts = []
+    for node in paragraph._p.iter(qn("w:t")):
+        if node.text:
+            parts.append(node.text)
+    return "".join(parts).strip()
+
+
 def _read_document_structure(doc, document_cfg, toc_cfg, report):
     """
     Work out which of the optional blocks the template was built with.
@@ -483,10 +501,6 @@ def _read_document_structure(doc, document_cfg, toc_cfg, report):
         if match:
             toc_cfg["levels"] = match.group(1)
     report.record("Contents page", toc_field is not None)
-
-    document_cfg["page_numbers"] = any(
-        t.upper().startswith("PAGE") for t in instructions
-    )
 
     heading_1_texts = [
         p.text.strip() for p in doc.paragraphs
@@ -512,7 +526,7 @@ def _read_document_structure(doc, document_cfg, toc_cfg, report):
         name = paragraph.style.name if paragraph.style is not None else ""
         if name.startswith("Heading") or name.startswith("TOC"):
             break
-        text = paragraph.text.strip()
+        text = _paragraph_text(paragraph)
         # alignment 1 is centred; python-docx exposes it as an enum that
         # compares equal to its integer value.
         if text and paragraph.alignment is not None and int(paragraph.alignment) == 1:
@@ -525,13 +539,109 @@ def _read_document_structure(doc, document_cfg, toc_cfg, report):
         document_cfg[key] = text
     report.record("Cover page", bool(cover_lines))
 
-    header_text = ""
-    if doc.sections:
-        paragraphs = doc.sections[0].header.paragraphs
-        if paragraphs:
-            header_text = paragraphs[0].text.strip()
-    document_cfg["header_text"] = header_text
-    report.record("Page header text", bool(header_text))
+
+
+
+def _slot_items(paragraph):
+    """
+    Walk a header or footer paragraph and say what sits at each position.
+
+    Position is decided by how many tabs have been passed: none means left,
+    one means centre, two means right. That is the same rule the builder lays
+    the paragraph out by.
+    """
+    items = {"left": None, "center": None, "right": None}
+    sides = ["left", "center", "right"]
+    index = 0
+    in_field = False
+
+    for child in paragraph._p:
+        if child.tag != qn("w:r"):
+            continue
+
+        if child.find(qn("w:tab")) is not None:
+            index += 1
+            continue
+
+        char = child.find(qn("w:fldChar"))
+        if char is not None:
+            kind = char.get(qn("w:fldCharType"))
+            if kind == "begin":
+                in_field = True
+            elif kind == "end":
+                in_field = False
+            continue
+
+        instruction = child.find(qn("w:instrText"))
+        if instruction is not None:
+            if (instruction.text or "").strip().upper().startswith("PAGE") \
+                    and index < len(sides):
+                items[sides[index]] = ("page", "")
+            continue
+
+        node = child.find(qn("w:t"))
+        if node is not None and not in_field and index < len(sides):
+            text = (node.text or "").strip()
+            if text:
+                items[sides[index]] = ("text", text)
+
+    return items
+
+
+def _read_header_footer(doc, header_footer, report):
+    """
+    Recover which field sits in each of the six positions.
+
+    The text fields are interchangeable, so which numbered field a line of
+    text came from is not recorded anywhere in the file. They are filled in
+    the order the positions are read, which preserves every text and position
+    but not necessarily the field number it was typed into.
+    """
+    if not doc.sections:
+        report.defaulted.append("Header and footer")
+        return
+    section = doc.sections[0]
+
+    header_footer["different_first_page"] = bool(
+        section.different_first_page_header_footer
+    )
+
+    # Start from nothing placed, so a position the file leaves empty does not
+    # keep whatever the previous config had in it.
+    for key in PLACEABLE_KEYS:
+        field = header_footer.setdefault(key, {})
+        field["enabled"] = False
+        field["slot"] = ""
+        if key != "page_number":
+            field["text"] = ""
+
+    spare = list(CUSTOM_FIELD_KEYS)
+    found = False
+
+    for area, container in (("header", section.header),
+                            ("footer", section.footer)):
+        if not container.paragraphs:
+            continue
+        for side in ("left", "center", "right"):
+            item = _slot_items(container.paragraphs[0])[side]
+            if item is None:
+                continue
+            kind, text = item
+            slot = "%s_%s" % (area, side)
+
+            if kind == "page":
+                key = "page_number"
+            elif spare:
+                key = spare.pop(0)
+                header_footer[key]["text"] = text
+            else:
+                continue
+
+            header_footer[key]["enabled"] = True
+            header_footer[key]["slot"] = slot
+            found = True
+
+    report.record("Header and footer positions", found)
 
 
 def _read_metadata(doc, template_cfg, report):
@@ -653,6 +763,9 @@ def read_template(source, defaults):
         _read_heading_numbering(doc, config["document"], report)
         _read_document_structure(
             doc, config["document"], styles["toc"], report,
+        )
+        _read_header_footer(
+            doc, config.setdefault("header_footer", {}), report,
         )
         _read_metadata(doc, config["template"], report)
 

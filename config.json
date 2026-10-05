@@ -19,9 +19,44 @@
     "subtitle_placeholder": "Subtitle or document type",
     "author_placeholder": "Author name",
     "date_placeholder": "Date",
-    "reference_placeholder": "Document reference",
-    "header_text": "",
-    "page_numbers": true
+    "reference_placeholder": "Document reference"
+  },
+  "header_footer": {
+    "different_first_page": true,
+    "page_number": {
+      "enabled": true,
+      "slot": "footer_center"
+    },
+    "custom_1": {
+      "enabled": false,
+      "slot": "",
+      "text": ""
+    },
+    "custom_2": {
+      "enabled": false,
+      "slot": "",
+      "text": ""
+    },
+    "custom_3": {
+      "enabled": false,
+      "slot": "",
+      "text": ""
+    },
+    "custom_4": {
+      "enabled": false,
+      "slot": "",
+      "text": ""
+    },
+    "custom_5": {
+      "enabled": false,
+      "slot": "",
+      "text": ""
+    },
+    "custom_6": {
+      "enabled": false,
+      "slot": "",
+      "text": ""
+    }
   },
   "styles": {
     "headings": {

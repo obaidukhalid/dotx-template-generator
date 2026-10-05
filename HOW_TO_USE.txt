@@ -92,7 +92,33 @@ because that is what Word stores: 1 inch is 1440 twips and 1 cm is 567 twips.
 
 
 -------------------------------------------------------------------------------
- 3. UPDATING A TEMPLATE YOU ALREADY HAVE   (new in v0.2)
+ 3. HEADER AND FOOTER
+-------------------------------------------------------------------------------
+
+There are three positions in the header and three in the footer: left, centre
+and right. Six in total, and each one holds a single field. Pick a position for
+one field and it disappears from the lists for the others.
+
+What you can put in them:
+
+  - The page number
+  - Up to six lines of text that you type
+
+None of it is linked to anything in the document. It is just a way to set the
+header and footer up in advance - page number on the footer right, your company
+name on the header left, and so on.
+
+  - Want a label? Type it in, like  Project: Apollo
+  - Six text fields plus the page number is more than six positions, so some
+    will stay on "Not shown". That is normal.
+  - "Blank header and footer on page 1" keeps the cover page clean. It is on
+    by default.
+  - Two fields cannot share a position. If you try, the tool tells you instead
+    of quietly dropping one.
+
+
+-------------------------------------------------------------------------------
+ 4. UPDATING A TEMPLATE YOU ALREADY HAVE
 -------------------------------------------------------------------------------
 
 If you already have a .dotx (or a .docx), you do not have to retype its
@@ -143,7 +169,7 @@ WHAT CARRIES OVER, AND WHAT DOES NOT
 
 
 -------------------------------------------------------------------------------
- 4. USING THE TEMPLATE IN WORD
+ 5. USING THE TEMPLATE IN WORD
 -------------------------------------------------------------------------------
 
   - Double click the .dotx and Word opens a NEW document based on it, which
@@ -167,7 +193,7 @@ WHAT CARRIES OVER, AND WHAT DOES NOT
 
 
 -------------------------------------------------------------------------------
- 5. SENDING ME YOUR FEEDBACK      <<< please do this
+ 6. SENDING ME YOUR FEEDBACK      <<< please do this
 -------------------------------------------------------------------------------
 
 This is the part I actually need from you. The tool is at v0.2 and what gets
@@ -209,7 +235,7 @@ file, so earlier feedback is never overwritten.
 
 
 -------------------------------------------------------------------------------
- 6. IF SOMETHING GOES WRONG
+ 7. IF SOMETHING GOES WRONG
 -------------------------------------------------------------------------------
 
 ./run.sh says "permission denied"

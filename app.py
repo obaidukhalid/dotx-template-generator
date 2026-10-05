@@ -29,7 +29,7 @@ from urllib.parse import quote
 
 from flask import Flask, jsonify, request, send_file, render_template
 
-from template_builder import build_template
+from template_builder import SlotConflict, build_template
 from template_reader import TemplateReadError, read_template
 
 APP_VERSION = "0.2"
@@ -279,6 +279,51 @@ def _text_style_fields(base, include_line_spacing=True, include_caps=False,
     return fields
 
 
+# Header and footer positions. Six exist, and each takes one field, so the
+# GUI removes a position from every other list as soon as it is claimed. The
+# "slot" field type below is what carries that behaviour into the form.
+SLOT_OPTIONS = [
+    ["", "Not shown"],
+    ["header_left", "Header left"],
+    ["header_center", "Header centre"],
+    ["header_right", "Header right"],
+    ["footer_left", "Footer left"],
+    ["footer_center", "Footer centre"],
+    ["footer_right", "Footer right"],
+]
+
+
+def _header_footer_group():
+    """
+    Build the Header and footer section.
+
+    The page number, then six text fields. Six is the most that can ever be
+    on the page at once, so there is always a field free for every position.
+    """
+    fields = [
+        {"path": "header_footer.different_first_page",
+         "label": "Blank header/footer on page 1", "type": "bool",
+         "help": "Keeps the cover page clear."},
+        {"path": "header_footer.page_number.enabled",
+         "label": "Show page number", "type": "bool"},
+        {"path": "header_footer.page_number.slot",
+         "label": "Page number position", "type": "slot",
+         "options": SLOT_OPTIONS},
+    ]
+    for number in range(1, 7):
+        key = f"custom_{number}"
+        fields += [
+            {"path": f"header_footer.{key}.enabled",
+             "label": f"Show text {number}", "type": "bool"},
+            {"path": f"header_footer.{key}.text",
+             "label": f"Text {number}", "type": "text"},
+            {"path": f"header_footer.{key}.slot",
+             "label": f"Text {number} position", "type": "slot",
+             "options": SLOT_OPTIONS},
+        ]
+    return fields
+
+
 SCHEMA = [
     {
         "id": "template",
@@ -347,11 +392,17 @@ SCHEMA = [
              "type": "text"},
             {"path": "document.reference_placeholder",
              "label": "Cover reference", "type": "text"},
-            {"path": "document.header_text", "label": "Page header text",
-             "type": "text", "help": "Leave empty for no header."},
-            {"path": "document.page_numbers",
-             "label": "Page number in footer", "type": "bool"},
         ],
+    },
+    {
+        "id": "header_footer",
+        "title": "Header and footer",
+        "hint": "Three positions in the header and three in the footer. Each "
+                "holds one field, so picking a position removes it from the "
+                "other lists. Nothing here is linked to the document text.",
+        # One row per field: the switch, what it shows, and where it goes.
+        "columns": 3,
+        "fields": _header_footer_group(),
     },
     {
         "id": "heading_1",
@@ -841,6 +892,10 @@ def api_generate():
 
     try:
         build_template(config, output_path)
+    except SlotConflict as error:
+        # The GUI stops this, but the API is reachable on its own and a
+        # hand-edited config.json can also get here.
+        return jsonify({"ok": False, "error": str(error)})
     except Exception as error:  # surfaced to the user in the GUI
         return jsonify({"ok": False, "error": f"{type(error).__name__}: {error}"})
 
