@@ -1,42 +1,6 @@
 # Changelog
 
-## v0.2
-
-### Load an existing template and restyle it
-
-A new **Load existing template…** button at the top of the builder takes a
-`.dotx` or `.docx` and reads its styling back into every setting on the page,
-so an existing template can be adjusted rather than retyped from scratch.
-
-A new module, `template_reader.py`, does the reading. It is the inverse of
-`template_builder.py` within the limits of the config: it recovers Heading 1
-to 4, body text, caption, quote, both bullet levels, the contents list heading
-and entries, page size, orientation, margins, the default font, the heading
-numbering scheme, which optional blocks the template contains, the cover
-placeholder text, the page header, the footer page number and the file
-metadata.
-
-It does **not** recover anything the config has no slot for — custom styles,
-Heading 5 and beyond, table styles, images, or the document's own text.
-Generate therefore writes a fresh template from the settings on screen rather
-than editing the uploaded file, and the uploaded file is never modified. The
-import panel lists, field group by field group, what came out of the file and
-what was left at the settings already loaded, so there is no guessing about
-what carried over.
-
-Supporting changes:
-
-- `POST /api/import` reads an uploaded package. It is the one handler that
-  takes a multipart body rather than strict JSON; the CSRF token check still
-  covers it, since a cross-origin form post cannot set the header. Uploads are
-  capped at 16 MB and a 413 is answered in the JSON shape the GUI expects.
-- A `.dotx` declares a template content type that python-docx refuses to open,
-  so the reader relabels a temporary copy before parsing it.
-- Select fields now keep a value that is not on their option list — a font or
-  a bullet glyph out of a loaded file is preserved and marked `(from file)`
-  instead of being snapped to the first option.
-- The old binary `.doc` and `.dot` formats are rejected with an explanation
-  rather than a traceback, as are files that are not Word packages at all.
+## v0.3
 
 ### Header and footer
 
@@ -76,6 +40,44 @@ the six positions.
 Verified: every slot combination round trips through build and read with no
 differences, and the preview and position rules are covered by 32 assertions
 run against the shipped page source.
+
+## v0.2
+
+### Load an existing template and restyle it
+
+A new **Load existing template…** button at the top of the builder takes a
+`.dotx` or `.docx` and reads its styling back into every setting on the page,
+so an existing template can be adjusted rather than retyped from scratch.
+
+A new module, `template_reader.py`, does the reading. It is the inverse of
+`template_builder.py` within the limits of the config: it recovers Heading 1
+to 4, body text, caption, quote, both bullet levels, the contents list heading
+and entries, page size, orientation, margins, the default font, the heading
+numbering scheme, which optional blocks the template contains, the cover
+placeholder text, the page header, the footer page number and the file
+metadata.
+
+It does **not** recover anything the config has no slot for — custom styles,
+Heading 5 and beyond, table styles, images, or the document's own text.
+Generate therefore writes a fresh template from the settings on screen rather
+than editing the uploaded file, and the uploaded file is never modified. The
+import panel lists, field group by field group, what came out of the file and
+what was left at the settings already loaded, so there is no guessing about
+what carried over.
+
+Supporting changes:
+
+- `POST /api/import` reads an uploaded package. It is the one handler that
+  takes a multipart body rather than strict JSON; the CSRF token check still
+  covers it, since a cross-origin form post cannot set the header. Uploads are
+  capped at 16 MB and a 413 is answered in the JSON shape the GUI expects.
+- A `.dotx` declares a template content type that python-docx refuses to open,
+  so the reader relabels a temporary copy before parsing it.
+- Select fields now keep a value that is not on their option list — a font or
+  a bullet glyph out of a loaded file is preserved and marked `(from file)`
+  instead of being snapped to the first option.
+- The old binary `.doc` and `.dot` formats are rejected with an explanation
+  rather than a traceback, as are files that are not Word packages at all.
 
 ### Feedback page
 

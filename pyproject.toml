@@ -1,6 +1,6 @@
 [project]
 name = "dotx-template-generator"
-version = "0.2.0"
+version = "0.3.0"
 description = "Local web GUI that turns styling settings into a real Word (.dotx) template"
 readme = "README.md"
 requires-python = ">=3.9"

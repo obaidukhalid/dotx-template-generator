@@ -27,7 +27,7 @@ from flask import Flask, jsonify, request, send_file, render_template
 from template_builder import SlotConflict, build_template
 from template_reader import TemplateReadError, read_template
 
-APP_VERSION = "0.2"
+APP_VERSION = "0.3"
 
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(APP_DIR, "config.json")

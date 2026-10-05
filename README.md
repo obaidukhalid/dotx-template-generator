@@ -1,4 +1,4 @@
-# Template Studio v0.2
+# Template Studio v0.3
 
 Builds Word template files (`.dotx`). You pick fonts, sizes, colours and spacing
 in your browser and it writes the template to disk.
@@ -210,7 +210,7 @@ Empty cover placeholders are skipped, the same as in the generated file.
 
 Nothing is sent until you send it. If `mailto:` does not work on your machine,
 use **Copy to clipboard** or **Open feedback folder** and email the file to
-`contact@v-embed.com` with the subject `Feedback - Dotx Studio v0.2`.
+`contact@v-embed.com` with the subject `Feedback - Dotx Studio v0.3`.
 
 ---
 
