@@ -27,42 +27,35 @@
       "enabled": true,
       "slot": "footer_center"
     },
-    "static_text": {
+    "custom_1": {
       "enabled": false,
       "slot": "",
       "text": ""
     },
-    "author": {
-      "enabled": true,
-      "slot": "header_left"
-    },
-    "doc_title": {
-      "enabled": true,
-      "slot": "header_right"
-    },
-    "custom_1": {
-      "enabled": false,
-      "slot": "",
-      "name": "",
-      "value": ""
-    },
     "custom_2": {
       "enabled": false,
       "slot": "",
-      "name": "",
-      "value": ""
+      "text": ""
     },
     "custom_3": {
       "enabled": false,
       "slot": "",
-      "name": "",
-      "value": ""
+      "text": ""
     },
     "custom_4": {
       "enabled": false,
       "slot": "",
-      "name": "",
-      "value": ""
+      "text": ""
+    },
+    "custom_5": {
+      "enabled": false,
+      "slot": "",
+      "text": ""
+    },
+    "custom_6": {
+      "enabled": false,
+      "slot": "",
+      "text": ""
     }
   },
   "styles": {

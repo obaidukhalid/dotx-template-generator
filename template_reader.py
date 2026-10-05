@@ -26,18 +26,15 @@ import zipfile
 
 from docx import Document
 from docx.oxml.ns import qn
-from lxml import etree
 
 from template_builder import (
     CUSTOM_FIELD_KEYS,
-    STUDIO_META_KEYS,
     DOCX_MAIN_CT,
     DOTX_MAIN_CT,
     HEADING_KEYS,
     HEADING_NUMBER_FORMATS,
     PAGE_SIZES,
     PLACEABLE_KEYS,
-    STUDIO_NS,
 )
 
 # Sections of a cover page, in the order _add_cover writes them.
@@ -474,23 +471,16 @@ def _paragraph_text(paragraph):
     """
     All the text in a paragraph, including text inside content controls.
 
-    python-docx's Paragraph.text only walks direct w:r children, so a cover
-    line that is a bound control reads as empty and every placeholder after it
-    shifts up one.
+    python-docx's Paragraph.text only walks direct w:r children. A file made
+    elsewhere may well put a cover line inside a content control, and that
+    line would otherwise read as empty and shift every placeholder after it
+    up by one.
     """
     parts = []
     for node in paragraph._p.iter(qn("w:t")):
         if node.text:
             parts.append(node.text)
     return "".join(parts).strip()
-
-
-def _has_custom_binding(paragraph):
-    """True when the paragraph carries a control bound to one of our fields."""
-    for binding in paragraph._p.iter(qn("w:dataBinding")):
-        if "ts:custom_" in (binding.get(qn("w:xpath")) or ""):
-            return True
-    return False
 
 
 def _read_document_structure(doc, document_cfg, toc_cfg, report):
@@ -531,15 +521,10 @@ def _read_document_structure(doc, document_cfg, toc_cfg, report):
     )
 
     # The cover is the opening run of centred paragraphs, before any heading.
-    # The lines for custom fields sit at the end of it and are read from the
-    # header instead, so they stop the run rather than shifting every
-    # placeholder down by one.
     cover_lines = []
     for paragraph in doc.paragraphs:
         name = paragraph.style.name if paragraph.style is not None else ""
         if name.startswith("Heading") or name.startswith("TOC"):
-            break
-        if _has_custom_binding(paragraph):
             break
         text = _paragraph_text(paragraph)
         # alignment 1 is centred; python-docx exposes it as an enum that
@@ -571,19 +556,7 @@ def _slot_items(paragraph):
     in_field = False
 
     for child in paragraph._p:
-        tag = child.tag
-
-        if tag == qn("w:sdt"):
-            binding = child.find(".//" + qn("w:dataBinding"))
-            alias = child.find(".//" + qn("w:alias"))
-            if binding is None or index >= len(sides):
-                continue
-            xpath = binding.get(qn("w:xpath")) or ""
-            name = alias.get(qn("w:val")) if alias is not None else ""
-            items[sides[index]] = ("bound", xpath, name)
-            continue
-
-        if tag != qn("w:r"):
+        if child.tag != qn("w:r"):
             continue
 
         if child.find(qn("w:tab")) is not None:
@@ -603,20 +576,27 @@ def _slot_items(paragraph):
         if instruction is not None:
             if (instruction.text or "").strip().upper().startswith("PAGE") \
                     and index < len(sides):
-                items[sides[index]] = ("page", "", "")
+                items[sides[index]] = ("page", "")
             continue
 
         node = child.find(qn("w:t"))
         if node is not None and not in_field and index < len(sides):
             text = (node.text or "").strip()
             if text:
-                items[sides[index]] = ("text", "", text)
+                items[sides[index]] = ("text", text)
 
     return items
 
 
 def _read_header_footer(doc, header_footer, report):
-    """Recover which field sits in each of the six positions."""
+    """
+    Recover which field sits in each of the six positions.
+
+    The text fields are interchangeable, so which numbered field a line of
+    text came from is not recorded anywhere in the file. They are filled in
+    the order the positions are read, which preserves every text and position
+    but not necessarily the field number it was typed into.
+    """
     if not doc.sections:
         report.defaulted.append("Header and footer")
         return
@@ -632,118 +612,49 @@ def _read_header_footer(doc, header_footer, report):
         field = header_footer.setdefault(key, {})
         field["enabled"] = False
         field["slot"] = ""
+        if key != "page_number":
+            field["text"] = ""
 
-    found, custom_found = False, False
-    custom_slots = {}
+    spare = list(CUSTOM_FIELD_KEYS)
+    found = False
 
     for area, container in (("header", section.header),
                             ("footer", section.footer)):
         if not container.paragraphs:
             continue
-        for side, item in _slot_items(container.paragraphs[0]).items():
+        for side in ("left", "center", "right"):
+            item = _slot_items(container.paragraphs[0])[side]
             if item is None:
                 continue
-            kind, xpath, name = item
+            kind, text = item
             slot = "%s_%s" % (area, side)
 
             if kind == "page":
                 key = "page_number"
-            elif kind == "text":
-                key = "static_text"
-                header_footer[key]["text"] = name
-            elif "title" in xpath:
-                key = "doc_title"
-            elif "creator" in xpath:
-                key = "author"
+            elif spare:
+                key = spare.pop(0)
+                header_footer[key]["text"] = text
             else:
-                match = re.search(r"custom_(\d)", xpath)
-                if not match:
-                    continue
-                key = "custom_%s" % match.group(1)
-                if key not in CUSTOM_FIELD_KEYS:
-                    continue
-                header_footer[key]["name"] = name
-                custom_slots[key] = slot
-                custom_found = True
+                continue
 
             header_footer[key]["enabled"] = True
             header_footer[key]["slot"] = slot
             found = True
 
-    # Custom field starting values live in the custom XML part, not the header.
-    for key, value in _custom_xml_values(doc).items():
-        if key in CUSTOM_FIELD_KEYS and isinstance(
-                header_footer.get(key), dict):
-            header_footer[key]["value"] = value
-
     report.record("Header and footer positions", found)
-    report.record("Custom fields", custom_found)
 
 
-def _custom_xml_values(doc):
-    """Read the starting values out of our own custom XML part, if present."""
-    values = {}
-    try:
-        parts = doc.part.package.iter_parts()
-    except AttributeError:
-        return values
-    for part in parts:
-        if "customXml/item" not in str(part.partname):
-            continue
-        try:
-            root = etree.fromstring(part.blob)
-        except Exception:
-            continue
-        if not str(root.tag).startswith("{%s}" % STUDIO_NS):
-            continue
-        for element in root:
-            key = etree.QName(element).localname
-            if key in CUSTOM_FIELD_KEYS or key in STUDIO_META_KEYS:
-                values[key] = element.text or ""
-    return values
-
-
-def _read_metadata(doc, template_cfg, document_cfg, header_footer, report):
-    """
-    Read the file properties into the template details.
-
-    Mapping the document title or the author into a header changes what those
-    two properties mean: they stop being file metadata and become the live
-    value the user types on the cover. So when a field is mapped, its property
-    is read into the cover placeholder and the template detail is left alone,
-    or importing a file would overwrite the template name with a cover
-    placeholder.
-    """
+def _read_metadata(doc, template_cfg, report):
     props = doc.core_properties
     found = False
-
-    if props.comments:
-        template_cfg["description"] = props.comments
-        found = True
-
-    # Written by this tool, and the only place the template's own name and
-    # author survive once those core properties are bound to live fields.
-    stored = _custom_xml_values(doc)
-    for stored_key, detail_key in (
-        ("template_name", "name"), ("template_author", "author"),
+    for key, value in (
+        ("name", props.title),
+        ("description", props.comments),
+        ("author", props.author),
     ):
-        if stored.get(stored_key):
-            template_cfg[detail_key] = stored[stored_key]
+        if value:
+            template_cfg[key] = value
             found = True
-
-    for prop, mapped_key, detail_key, cover_key in (
-        (props.title, "doc_title", "name", "title_placeholder"),
-        (props.author, "author", "author", "author_placeholder"),
-    ):
-        if not prop:
-            continue
-        found = True
-        if (header_footer.get(mapped_key) or {}).get("enabled"):
-            document_cfg[cover_key] = prop
-        elif not stored.get("template_name" if detail_key == "name"
-                            else "template_author"):
-            template_cfg[detail_key] = prop
-
     report.record("Template details", found)
 
 
@@ -856,10 +767,7 @@ def read_template(source, defaults):
         _read_header_footer(
             doc, config.setdefault("header_footer", {}), report,
         )
-        _read_metadata(
-            doc, config["template"], config["document"],
-            config.get("header_footer", {}), report,
-        )
+        _read_metadata(doc, config["template"], report)
 
         # Inline run styles are applied as direct formatting rather than as
         # character styles, so there is nothing in the file to read them from.

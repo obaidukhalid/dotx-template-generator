@@ -228,6 +228,14 @@
   .pv-strip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .pv-strip span:nth-child(2) { text-align: center; }
   .pv-strip span:nth-child(3) { text-align: right; }
+  .pv-break {
+    display: flex; align-items: center; gap: 8px;
+    margin: 14px 0; font-size: 9px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+  .pv-break::before, .pv-break::after {
+    content: ''; flex: 1; border-top: 1px dashed var(--green-mid);
+  }
   .pv-header { border-bottom: 1px solid var(--border); margin-bottom: 10px; }
   .pv-footer { border-top: 1px solid var(--border); margin-top: 10px; }
 
@@ -323,6 +331,10 @@ const normHex = v => {
 // position is claimed or released.
 let SLOT_SELECTS = [];
 
+// Mirrors PLACEABLE_KEYS in template_builder.py
+const PLACEABLE_KEYS = ['page_number', 'custom_1', 'custom_2', 'custom_3',
+                        'custom_4', 'custom_5', 'custom_6'];
+
 // The owning field key for a slot path, e.g. header_footer.author.slot -> author
 const slotFieldKey = path => path.split('.')[1];
 
@@ -331,7 +343,7 @@ const fieldEnabled = key => !!getPath(CONFIG, `header_footer.${key}.enabled`);
 function takenSlots(exceptKey) {
   const taken = {};
   SLOT_SELECTS.forEach(({ field }) => {
-    const key = slotFieldKey(field.path);
+    const key = slotFieldKey(field.path);  // header_footer.<key>.slot
     if (key === exceptKey || !fieldEnabled(key)) return;
     const value = getPath(CONFIG, field.path);
     if (value) taken[value] = key;
@@ -562,21 +574,15 @@ function styleString(spec, extra) {
   return parts.join(';') + (extra ? ';' + extra : '');
 }
 
-// Mirrors _mapped_field_text in template_builder.py
+// Mirrors _slot_content in template_builder.py
 function slotText(key) {
-  const d = CONFIG.document || {}, f = getPath(CONFIG, 'header_footer.' + key) || {};
-  if (key === 'page_number') return '1';
-  if (key === 'static_text') return f.text || '';
-  if (key === 'author') return d.author_placeholder || 'Author name';
-  if (key === 'doc_title') return d.title_placeholder || 'Document Title';
-  const name = (f.name || '').trim();
-  return f.value || (name ? '[' + name + ']' : '[Custom field]');
+  const f = getPath(CONFIG, 'header_footer.' + key) || {};
+  return key === 'page_number' ? '1' : (f.text || '');
 }
 
 function slotStrip(area) {
   const hf = CONFIG.header_footer || {};
-  const keys = ['page_number', 'static_text', 'author', 'doc_title',
-                'custom_1', 'custom_2', 'custom_3', 'custom_4'];
+  const keys = PLACEABLE_KEYS;
   const cells = { left: '', center: '', right: '' };
   let used = false;
 
@@ -596,11 +602,42 @@ function slotStrip(area) {
     <span>${cells.left}</span><span>${cells.center}</span><span>${cells.right}</span></div>`;
 }
 
+// The cover page, drawn the way _add_cover builds it: a big centred title,
+// a smaller subtitle, then the three placeholder lines.
+function coverPage() {
+  const d = CONFIG.document || {};
+  if (!d.include_cover) return '';
+  const h = CONFIG.styles.headings, b = CONFIG.styles.paragraph.body;
+  const out = [];
+
+  out.push(`<div style="${styleString({
+    font: h.heading_1.font, fontSize: Number(h.heading_1.fontSize) + 4,
+    bold: true, color: h.heading_1.color,
+    spacing_before: 700, spacing_after: 120
+  })};text-align:center">${escapeHtml(d.title_placeholder || '')}</div>`);
+
+  out.push(`<div style="${styleString({
+    font: h.heading_2.font, fontSize: Math.max(6, Number(h.heading_2.fontSize) - 4),
+    color: h.heading_2.color, spacing_before: 0, spacing_after: 560
+  })};text-align:center">${escapeHtml(d.subtitle_placeholder || '')}</div>`);
+
+  [d.author_placeholder, d.date_placeholder, d.reference_placeholder]
+    .filter(Boolean)
+    .forEach(line => out.push(`<div style="${styleString({
+      font: b.font, fontSize: b.fontSize, color: b.color,
+      spacing_before: 0, spacing_after: 60
+    })};text-align:center">${escapeHtml(line)}</div>`));
+
+  return out.join('') +
+    `<div class="pv-break"><span>page break</span></div>`;
+}
+
 function refreshPreview() {
   const s = CONFIG.styles, h = s.headings, b = s.paragraph.body;
   const out = [];
 
   out.push(slotStrip('header'));
+  out.push(coverPage());
 
   const toc = s.toc;
   out.push(`<div style="${styleString({

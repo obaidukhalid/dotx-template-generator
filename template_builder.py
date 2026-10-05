@@ -18,12 +18,9 @@ import zipfile
 from docx import Document
 from docx.enum.section import WD_ORIENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
-from docx.opc.packuri import PackURI
-from docx.opc.part import Part
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Emu, Mm, Pt, RGBColor, Twips
-from lxml import etree
 
 # ----------------------------------------------------------------------------
 # Constants
@@ -48,58 +45,25 @@ DOTX_MAIN_CT = (
 HEADING_KEYS = ["heading_1", "heading_2", "heading_3", "heading_4"]
 
 # ----------------------------------------------------------------------------
-# Mapped document properties
+# Header and footer fields
 #
-# A Word field such as { AUTHOR } reads the file's saved metadata, so typing a
-# name on the title page would not change it. What does stay in sync is a
-# data bound content control: two controls pointing at the same XML node track
-# each other as the user types, with no field update. That is the mechanism
-# behind Word's own Quick Parts, Document Property.
+# A header and a footer have three positions each, built from a left aligned
+# start plus a centre and a right tab stop. That is six places in total and
+# there is nowhere else to put anything, so each one holds a single field.
 #
-# Author and the document title bind to the package's core properties, which
-# Word exposes under a fixed store id. Custom fields have nothing to bind to
-# until we add a custom XML part of our own, which _add_custom_xml_part does.
+# The fields are self contained: a page number, or a line of text the user
+# typed. Nothing here reads or writes the document body.
 # ----------------------------------------------------------------------------
 
-CORE_STORE_ID = "{6C3C8BC8-F283-45AE-878A-BAB7291924A1}"
-CORE_PREFIX_MAPPINGS = (
-    "xmlns:ns0='http://purl.org/dc/elements/1.1/' "
-    "xmlns:ns1='http://schemas.openxmlformats.org/package/2006/metadata/"
-    "core-properties'"
-)
-CORE_TITLE_XPATH = "/ns1:coreProperties[1]/ns0:title[1]"
-CORE_AUTHOR_XPATH = "/ns1:coreProperties[1]/ns0:creator[1]"
+CUSTOM_FIELD_KEYS = ["custom_%d" % n for n in range(1, 7)]
 
-STUDIO_NS = "http://v-embed.com/schemas/templatestudio/fields"
-STUDIO_PREFIX_MAPPINGS = "xmlns:ts='%s'" % STUDIO_NS
-STUDIO_STORE_ID = "{1D2E3F40-5A6B-4C7D-8E9F-0A1B2C3D4E5F}"
-
-RT_CUSTOM_XML = (
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
-    "customXml"
-)
-RT_CUSTOM_XML_PROPS = (
-    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
-    "customXmlProps"
-)
-CT_CUSTOM_XML_PROPS = (
-    "application/vnd.openxmlformats-officedocument.customXmlProperties+xml"
-)
-
-CUSTOM_FIELD_KEYS = ["custom_1", "custom_2", "custom_3", "custom_4"]
-
-# The six places a field can go. Word gives a header and a footer three
-# positions each, built from a left aligned start plus a centre and a right
-# tab stop, so there is nowhere else to put anything.
 SLOTS = [
     "header_left", "header_center", "header_right",
     "footer_left", "footer_center", "footer_right",
 ]
 
 # Every field that can claim a slot, in the order they are resolved.
-PLACEABLE_KEYS = (
-    ["page_number", "static_text", "author", "doc_title"] + CUSTOM_FIELD_KEYS
-)
+PLACEABLE_KEYS = ["page_number"] + CUSTOM_FIELD_KEYS
 
 
 class SlotConflict(Exception):
@@ -284,100 +248,6 @@ def _field_runs(instruction, placeholder=None, **fmt):
     runs.append(end)
 
     return [_run_props(r, **fmt) for r in runs]
-
-
-_SDT_ID = [1000]
-
-
-def _next_sdt_id():
-    _SDT_ID[0] += 1
-    return _SDT_ID[0]
-
-
-def _bound_control(alias, xpath, prefix_mappings, store_id, text, **fmt):
-    """
-    A run level content control whose text is bound to an XML node.
-
-    Word treats the bound node as the single source of truth: every control
-    pointing at the same xpath shows the same text and updates as any one of
-    them is typed into. `text` is what the node is seeded with, so it is also
-    what the control shows until the user changes it.
-    """
-    sdt = OxmlElement("w:sdt")
-
-    props = OxmlElement("w:sdtPr")
-    for tag, value in (("w:alias", alias), ("w:tag", alias)):
-        element = OxmlElement(tag)
-        element.set(qn("w:val"), value)
-        props.append(element)
-    identifier = OxmlElement("w:id")
-    identifier.set(qn("w:val"), str(_next_sdt_id()))
-    props.append(identifier)
-
-    binding = OxmlElement("w:dataBinding")
-    binding.set(qn("w:prefixMappings"), prefix_mappings)
-    binding.set(qn("w:xpath"), xpath)
-    binding.set(qn("w:storeItemID"), store_id)
-    props.append(binding)
-
-    props.append(OxmlElement("w:text"))
-    sdt.append(props)
-
-    content = OxmlElement("w:sdtContent")
-    content.append(_text_run(text, **fmt))
-    sdt.append(content)
-    return sdt
-
-
-def _custom_field_xpath(key):
-    return "/ts:fields[1]/ts:%s[1]" % key
-
-
-# Template details are kept here as well as in the core properties. Mapping
-# the document title or the author rebinds those two core properties to the
-# live value the user types on the cover, which leaves the template's own name
-# and author with nowhere else to live.
-STUDIO_META_KEYS = ["template_name", "template_author"]
-
-
-def _add_custom_xml_part(doc, values):
-    """
-    Add the custom XML part the custom fields bind to.
-
-    `values` maps custom_1..custom_4 and the template detail keys to their
-    text. Word needs the part, a properties part carrying the store id the
-    controls reference, and a relationship from the document; python-docx
-    writes the content type override and the .rels files from the parts
-    themselves.
-    """
-    package = doc.part.package
-
-    root = etree.Element("{%s}fields" % STUDIO_NS, nsmap={"ts": STUDIO_NS})
-    for key in CUSTOM_FIELD_KEYS + STUDIO_META_KEYS:
-        element = etree.SubElement(root, "{%s}%s" % (STUDIO_NS, key))
-        element.text = values.get(key, "")
-    item_xml = etree.tostring(
-        root, xml_declaration=True, encoding="UTF-8", standalone=True
-    )
-
-    props_xml = (
-        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
-        '<ds:datastoreItem xmlns:ds="http://schemas.openxmlformats.org/'
-        'officeDocument/2006/customXml" ds:itemID="%s">'
-        '<ds:schemaRefs><ds:schemaRef ds:uri="%s"/></ds:schemaRefs>'
-        "</ds:datastoreItem>" % (STUDIO_STORE_ID, STUDIO_NS)
-    ).encode("utf-8")
-
-    # item1 belongs to the template python-docx starts from, so ours is item2.
-    item = Part(
-        PackURI("/customXml/item2.xml"), "application/xml", item_xml, package
-    )
-    props = Part(
-        PackURI("/customXml/itemProps2.xml"), CT_CUSTOM_XML_PROPS,
-        props_xml, package,
-    )
-    item.relate_to(props, RT_CUSTOM_XML_PROPS)
-    doc.part.relate_to(item, RT_CUSTOM_XML)
 
 
 def _ensure_style(doc, name, style_id=None, based_on="Normal"):
@@ -897,89 +767,48 @@ def _configure_page(doc, config):
 # ----------------------------------------------------------------------------
 
 def _add_cover(doc, config):
-    """
-    Build a cover page from the configured placeholder text.
-
-    The title and author lines become bound content controls when those fields
-    are mapped into a header or footer, so typing over them on the cover
-    changes the header too. Everything else on the cover is ordinary text.
-    """
+    """Build a cover page from the configured placeholder text."""
     doc_cfg = config.get("document", {})
-    header_footer = config.get("header_footer", {})
     headings = config["styles"]["headings"]
     body = config["styles"]["paragraph"]["body"]
 
     spacer = doc.add_paragraph()
     spacer.paragraph_format.space_before = Twips(1600)
 
-    title_fmt = {
-        "font_name": headings["heading_1"].get("font", "Calibri"),
-        "size_pt": float(headings["heading_1"].get("fontSize", 28)) + 4,
-        "color_hex": headings["heading_1"].get("color", "006600"),
-        "bold": True,
-    }
     title = doc.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
     title.paragraph_format.space_after = Twips(120)
-    title_text = doc_cfg.get("title_placeholder", "Document Title")
-    if (header_footer.get("doc_title") or {}).get("enabled"):
-        title._p.append(_bound_control(
-            "Title", CORE_TITLE_XPATH, CORE_PREFIX_MAPPINGS,
-            CORE_STORE_ID, title_text, **title_fmt))
-    else:
-        title._p.append(_text_run(title_text, **title_fmt))
+    title._p.append(_text_run(
+        doc_cfg.get("title_placeholder", "Document Title"),
+        font_name=headings["heading_1"].get("font", "Calibri"),
+        size_pt=float(headings["heading_1"].get("fontSize", 28)) + 4,
+        color_hex=headings["heading_1"].get("color", "006600"),
+        bold=True,
+    ))
 
     subtitle = doc.add_paragraph()
     subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = subtitle.add_run(doc_cfg.get("subtitle_placeholder", "Subtitle"))
-    run.font.size = Pt(float(headings["heading_2"].get("fontSize", 20)) - 4)
-    run.font.name = headings["heading_2"].get("font", "Calibri")
-    run.font.color.rgb = RGBColor.from_string(
-        headings["heading_2"].get("color", "005200").upper()
-    )
     subtitle.paragraph_format.space_after = Twips(900)
+    subtitle._p.append(_text_run(
+        doc_cfg.get("subtitle_placeholder", "Subtitle"),
+        font_name=headings["heading_2"].get("font", "Calibri"),
+        size_pt=float(headings["heading_2"].get("fontSize", 20)) - 4,
+        color_hex=headings["heading_2"].get("color", "005200"),
+    ))
 
     line_fmt = {
         "font_name": body.get("font", "Calibri"),
         "size_pt": float(body.get("fontSize", 11)),
     }
-
-    def cover_line():
-        paragraph = doc.add_paragraph()
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        paragraph.paragraph_format.space_after = Twips(60)
-        return paragraph
-
-    author_text = doc_cfg.get("author_placeholder", "Author name")
-    if author_text:
-        paragraph = cover_line()
-        if (header_footer.get("author") or {}).get("enabled"):
-            paragraph._p.append(_bound_control(
-                "Author", CORE_AUTHOR_XPATH, CORE_PREFIX_MAPPINGS,
-                CORE_STORE_ID, author_text, **line_fmt))
-        else:
-            paragraph._p.append(_text_run(author_text, **line_fmt))
-
-    for key in ("date_placeholder", "reference_placeholder"):
+    for key in ("author_placeholder", "date_placeholder",
+                "reference_placeholder"):
         text = doc_cfg.get(key, "")
         if not text:
             continue
-        cover_line()._p.append(_text_run(text, **line_fmt))
-
-    # One labelled line per custom field, so there is somewhere to type the
-    # value that the header or footer copy then follows.
-    for key in CUSTOM_FIELD_KEYS:
-        field = header_footer.get(key) or {}
-        if not field.get("enabled"):
-            continue
-        name = (field.get("name") or "").strip()
-        paragraph = cover_line()
-        if name:
-            paragraph._p.append(_text_run("%s: " % name, **line_fmt))
-        paragraph._p.append(_bound_control(
-            name or key.replace("_", " ").title(),
-            _custom_field_xpath(key), STUDIO_PREFIX_MAPPINGS,
-            STUDIO_STORE_ID, _mapped_field_text(config, key), **line_fmt))
+        paragraph = doc.add_paragraph()
+        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        paragraph.paragraph_format.space_after = Twips(60)
+        paragraph._p.append(_text_run(text, **line_fmt))
 
     doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
@@ -1144,52 +973,12 @@ def _add_outline(doc, config):
         placeholder.style = doc.styles["Body Text"]
 
 
-def _mapped_field_text(config, key):
-    """
-    The text a mapped field starts out showing.
-
-    The bound XML node is what Word displays, so this is also the initial
-    value of the underlying property. Author and the document title take the
-    cover placeholders, because the cover is where the user types them.
-    """
-    doc_cfg = config.get("document", {})
-    header_footer = config.get("header_footer", {})
-    field = header_footer.get(key) or {}
-
-    if key == "author":
-        return doc_cfg.get("author_placeholder") or "Author name"
-    if key == "doc_title":
-        return doc_cfg.get("title_placeholder") or "Document Title"
-    if key == "static_text":
-        return field.get("text", "")
-    # A custom field with no value still needs something visible to click on.
-    name = (field.get("name") or "").strip()
-    return field.get("value") or ("[%s]" % name if name else "[Custom field]")
-
-
 def _slot_content(config, key, fmt):
     """Return the run elements that render one field inside a header paragraph."""
-    header_footer = config.get("header_footer", {})
-    field = header_footer.get(key) or {}
-    text = _mapped_field_text(config, key)
-
+    field = (config.get("header_footer") or {}).get(key) or {}
     if key == "page_number":
         return _field_runs("PAGE", **fmt)
-    if key == "static_text":
-        return [_text_run(text, **fmt)]
-    if key == "author":
-        return [_bound_control(
-            "Author", CORE_AUTHOR_XPATH, CORE_PREFIX_MAPPINGS,
-            CORE_STORE_ID, text, **fmt)]
-    if key == "doc_title":
-        return [_bound_control(
-            "Title", CORE_TITLE_XPATH, CORE_PREFIX_MAPPINGS,
-            CORE_STORE_ID, text, **fmt)]
-
-    alias = (field.get("name") or "").strip() or key.replace("_", " ").title()
-    return [_bound_control(
-        alias, _custom_field_xpath(key), STUDIO_PREFIX_MAPPINGS,
-        STUDIO_STORE_ID, text, **fmt)]
+    return [_text_run(field.get("text", ""), **fmt)]
 
 
 def _set_three_part_tabs(paragraph, section):
@@ -1336,17 +1125,6 @@ def build_template(config, output_path):
 
     doc = Document()
 
-    header_footer = config.get("header_footer", {})
-    meta = config.get("template", {})
-    part_values = {
-        key: (_mapped_field_text(config, key)
-              if (header_footer.get(key) or {}).get("enabled") else "")
-        for key in CUSTOM_FIELD_KEYS
-    }
-    part_values["template_name"] = meta.get("name", "")
-    part_values["template_author"] = meta.get("author", "")
-    _add_custom_xml_part(doc, part_values)
-
     _configure_page(doc, config)
     _configure_styles(doc, config)
     _apply_heading_numbering(doc, config)
@@ -1370,26 +1148,9 @@ def build_template(config, output_path):
     _enable_update_fields(doc)
 
     meta = config.get("template", {})
-    doc_cfg = config.get("document", {})
-
-    # The mapped fields are bound to these two properties, and Word shows the
-    # property, not whatever text a control was written with. So when a field
-    # is mapped, its property has to start out holding the cover placeholder
-    # the user is going to type over. Unmapped, they keep their old meaning as
-    # file metadata.
-    if (header_footer.get("doc_title") or {}).get("enabled"):
-        doc.core_properties.title = doc_cfg.get(
-            "title_placeholder") or meta.get("name", "Document Template")
-    else:
-        doc.core_properties.title = meta.get("name", "Document Template")
-
-    if (header_footer.get("author") or {}).get("enabled"):
-        doc.core_properties.author = doc_cfg.get(
-            "author_placeholder") or meta.get("author", "")
-    else:
-        doc.core_properties.author = meta.get("author", "")
-
+    doc.core_properties.title = meta.get("name", "Document Template")
     doc.core_properties.comments = meta.get("description", "")
+    doc.core_properties.author = meta.get("author", "")
     doc.core_properties.category = "Template"
 
     doc.save(output_path)

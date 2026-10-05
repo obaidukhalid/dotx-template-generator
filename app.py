@@ -235,50 +235,33 @@ SLOT_OPTIONS = [
     ["footer_right", "Footer right"],
 ]
 
-# Label and optional extra inputs for each field that can claim a position.
-PLACEABLE_FIELDS = [
-    ("page_number", "Page number", None),
-    ("static_text", "Fixed text", "text"),
-    ("author", "Author (from the cover)", None),
-    ("doc_title", "Document title (from the cover)", None),
-]
 
+def _header_footer_group():
+    """
+    Build the Header and footer section.
 
-def _slot_field_group():
-    """Build the Header and footer section: one row per placeable field."""
+    The page number, then six text fields. Six is the most that can ever be
+    on the page at once, so there is always a field free for every position.
+    """
     fields = [
         {"path": "header_footer.different_first_page",
          "label": "Blank header and footer on page 1", "type": "bool",
          "help": "Keeps the cover page clear."},
+        {"path": "header_footer.page_number.enabled",
+         "label": "Show page number", "type": "bool"},
+        {"path": "header_footer.page_number.slot",
+         "label": "Page number position", "type": "slot",
+         "options": SLOT_OPTIONS},
     ]
-    for key, label, extra in PLACEABLE_FIELDS:
-        fields.append({"path": f"header_footer.{key}.enabled",
-                       "label": f"Show {label.lower()}", "type": "bool"})
-        if extra == "text":
-            fields.append({"path": f"header_footer.{key}.text",
-                           "label": f"{label} to show", "type": "text"})
-        fields.append({"path": f"header_footer.{key}.slot",
-                       "label": f"{label} position", "type": "slot",
-                       "options": SLOT_OPTIONS})
-    return fields
-
-
-def _custom_field_group():
-    """Build the Custom fields section: name, value and position for each."""
-    fields = []
-    for number in range(1, 5):
+    for number in range(1, 7):
         key = f"custom_{number}"
         fields += [
             {"path": f"header_footer.{key}.enabled",
-             "label": f"Use custom field {number}", "type": "bool"},
-            {"path": f"header_footer.{key}.name",
-             "label": f"Field {number} name", "type": "text",
-             "help": "Shown as the label on the cover page."},
-            {"path": f"header_footer.{key}.value",
-             "label": f"Field {number} starting value", "type": "text",
-             "help": "Leave empty to show the name in brackets."},
+             "label": f"Show text {number}", "type": "bool"},
+            {"path": f"header_footer.{key}.text",
+             "label": f"Text {number}", "type": "text"},
             {"path": f"header_footer.{key}.slot",
-             "label": f"Field {number} position", "type": "slot",
+             "label": f"Text {number} position", "type": "slot",
              "options": SLOT_OPTIONS},
         ]
     return fields
@@ -357,18 +340,10 @@ SCHEMA = [
     {
         "id": "header_footer",
         "title": "Header and footer",
-        "hint": "A header and a footer have three positions each: left, "
-                "centre and right. Each position holds one field, so picking "
-                "a position removes it from the other lists.",
-        "fields": _slot_field_group(),
-    },
-    {
-        "id": "custom_fields",
-        "title": "Custom fields",
-        "hint": "Four fields of your own. Each one gets a line on the cover "
-                "page and a copy in the header or footer position you pick. "
-                "Type the value on the cover and the copy follows.",
-        "fields": _custom_field_group(),
+        "hint": "Three positions in the header and three in the footer. Each "
+                "holds one field, so picking a position removes it from the "
+                "other lists. Nothing here is linked to the document text.",
+        "fields": _header_footer_group(),
     },
     {
         "id": "heading_1",

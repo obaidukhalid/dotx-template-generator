@@ -72,36 +72,29 @@ because that is what Word stores: 1 inch is 1440 twips and 1 cm is 567 twips.
 
 
 -------------------------------------------------------------------------------
- 3. HEADER AND FOOTER FIELDS
+ 3. HEADER AND FOOTER
 -------------------------------------------------------------------------------
 
-A header and a footer have three positions each: left, centre and right. Six
-in total, and each one holds a single field. Pick a position for one field and
-it disappears from the lists for the others.
+There are three positions in the header and three in the footer: left, centre
+and right. Six in total, and each one holds a single field. Pick a position for
+one field and it disappears from the lists for the others.
 
 What you can put in them:
 
-  - Page number
-  - Fixed text that you type
-  - Author        (the same one as on the cover page)
-  - Document title (the same one as on the cover page)
-  - Up to four fields of your own, which you name yourself
+  - The page number
+  - Up to six lines of text that you type
 
-THE USEFUL PART
+None of it is linked to anything in the document. It is just a way to set the
+header and footer up in advance - page number on the footer right, your company
+name on the header left, and so on.
 
-Author, document title and your own fields appear in two places: on the cover
-page, and in the header or footer. Type the author's name on the cover page and
-the header updates itself. You do not have to press anything.
-
-Your own fields get a line each on the cover page, labelled with the name you
-gave them. If you leave the starting value empty, the cover shows the name in
-brackets so you can see where to click.
-
-"Blank header and footer on page 1" keeps the cover page clean. It is on by
-default.
-
-Two fields cannot share a position. If you try, the tool tells you instead of
-quietly dropping one.
+  - Want a label? Type it in, like  Project: Apollo
+  - Six text fields plus the page number is more than six positions, so some
+    will stay on "Not shown". That is normal.
+  - "Blank header and footer on page 1" keeps the cover page clean. It is on
+    by default.
+  - Two fields cannot share a position. If you try, the tool tells you instead
+    of quietly dropping one.
 
 
 -------------------------------------------------------------------------------

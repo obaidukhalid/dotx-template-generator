@@ -57,7 +57,8 @@ python app.py
 
 1. Choose a preset from the dropdown, or start from the current settings.
 2. Edit the settings. Use the list on the left to jump between sections.
-3. Watch the preview on the right update as you type.
+3. Watch the preview on the right update as you type. It shows the cover
+   page, the header and footer strips, and the body styles.
 4. Set the save folder and file name at the bottom.
 5. Click **Generate template**.
 6. Click **Open folder** or **Download** to get the file.
@@ -108,8 +109,7 @@ first.
 |---|---|
 | Template details | Name, description and author stored in the file |
 | Document structure | Cover page, contents page, style guide, heading numbering, starter outline, cover placeholders |
-| Header and footer | Which field sits in each of the six positions |
-| Custom fields | Four fields of your own, with names and positions |
+| Header and footer | Page number and six text fields, and which of the six positions each one sits in |
 | Heading 1 to 4 | Font, size, colour, bold, italic, all caps, spacing |
 | Body text | Font, size, colour, bold, italic, spacing, line spacing |
 | Caption | Same, for figure and table captions |
@@ -161,43 +161,28 @@ Handy twips values: 120 small gap, 240 one line at 12 pt, 360 generous.
 
 ---
 
-## 6. Header and footer fields
+## 6. Header and footer
 
-A header and a footer have three positions each: left, centre, right. **Six in
-total, one field per position.** Pick a position and it disappears from the
-other dropdowns.
+Three positions in the header, three in the footer. **Six in total, one field
+per position.** Pick a position and it disappears from the other dropdowns.
 
-Fields you can place:
+What you can place:
 
 - **Page number**
-- **Fixed text** — whatever you type
-- **Author** — the one from the cover page
-- **Document title** — the one from the cover page
-- **Four custom fields** — you name them
+- **Six lines of text** you type
 
-### Live fields
+Nothing here is linked to the document text. It is styling for the header and
+footer, so you can set them up once in the template: page number on the footer
+right, your company name on the header left, and so on.
 
-Author, document title and the custom fields appear **twice**: once on the
-cover page and once in the header or footer. Type the value on the cover and
-the header copy changes with it. No refresh, no F9.
-
-This works because they are content controls bound to the same data, not Word
-fields. A `{ AUTHOR }` field would read the file's saved metadata and ignore
-what you typed.
-
-Custom fields get a labelled line each on the cover page. Leave a value empty
-and the cover shows the field name in brackets, so there is something to click.
-
-**Blank header and footer on page 1** keeps the cover clear. On by default.
-
-### Worth knowing
-
-- Author and document title are the real Word Title and Author properties, so
-  they also show under File → Info.
-- Because of that, the template's own name and author are stored separately
-  inside the file, and still survive a reload.
+- Type `Project: Apollo` if you want a label in front of the value.
+- Six text fields and a page number is more than six positions, so some will
+  be left on **Not shown**. That is fine.
+- **Blank header and footer on page 1** keeps the cover clear. On by default.
 - Two fields cannot share a position. The tool refuses to build rather than
   dropping one silently.
+
+Text is 9 pt in the caption colour, matching the rest of the template.
 
 ---
 
