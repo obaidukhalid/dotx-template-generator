@@ -57,8 +57,7 @@ python app.py
 
 1. Choose a preset from the dropdown, or start from the current settings.
 2. Edit the settings. Use the list on the left to jump between sections.
-3. Watch the preview on the right update as you type. It shows the cover
-   page, the header and footer strips, and the body styles.
+3. Watch the [live preview](#7-live-preview) on the right update as you type.
 4. Set the save folder and file name at the bottom.
 5. Click **Generate template**.
 6. Click **Open folder** or **Download** to get the file.
@@ -163,30 +162,46 @@ Handy twips values: 120 small gap, 240 one line at 12 pt, 360 generous.
 
 ## 6. Header and footer
 
-Three positions in the header, three in the footer. **Six in total, one field
-per position.** Pick a position and it disappears from the other dropdowns.
+Six positions: left, centre and right, in the header and in the footer. **One
+field per position.** Pick a position and it disappears from the other
+dropdowns.
 
-What you can place:
+You can place:
 
-- **Page number**
+- The **page number**
 - **Six lines of text** you type
 
-Nothing here is linked to the document text. It is styling for the header and
-footer, so you can set them up once in the template: page number on the footer
-right, your company name on the header left, and so on.
+The settings are one row per field: switch it on, type the text, pick the
+position.
 
-- Type `Project: Apollo` if you want a label in front of the value.
-- Six text fields and a page number is more than six positions, so some will
-  be left on **Not shown**. That is fine.
-- **Blank header and footer on page 1** keeps the cover clear. On by default.
+None of it is linked to the document text. It is a way to set the header and
+footer up once in the template — page number on the footer right, company name
+on the header left.
+
+- Want a label? Type it in: `Project: Apollo`.
+- Seven fields and six positions means some stay on **Not shown**. Normal.
+- **Blank header/footer on page 1** keeps the cover clear. On by default.
 - Two fields cannot share a position. The tool refuses to build rather than
-  dropping one silently.
+  silently dropping one.
 
-Text is 9 pt in the caption colour, matching the rest of the template.
+Text is 9 pt in the caption colour.
 
 ---
 
-## 7. Send feedback
+## 7. Live preview
+
+The panel on the right updates as you type. It shows:
+
+- The **cover page** — title, subtitle, author, date and reference, in their
+  real fonts, sizes and colours
+- A **header strip** and **footer strip** with whatever is in the six positions
+- The **body styles** — headings, body text, bullets, caption, quote, contents
+
+Empty cover placeholders are skipped, the same as in the generated file.
+
+---
+
+## 8. Send feedback
 
 1. Click **Feedback** at the top of the page.
 2. Answer the questions.
@@ -199,7 +214,7 @@ use **Copy to clipboard** or **Open feedback folder** and email the file to
 
 ---
 
-## 8. Use the template in Word
+## 9. Use the template in Word
 
 - Double click the `.dotx` — Word opens a **new document** based on it. That is
   what a template does.
@@ -217,7 +232,7 @@ List Bullet 2. Shortcuts `Ctrl+Alt+1/2/3` apply the first three heading levels.
 
 ---
 
-## 9. Use it from a script
+## 10. Use it from a script
 
 The engine runs without the GUI, for build pipelines or batch jobs:
 
@@ -233,7 +248,7 @@ build_template(config, "output/Report_Template.dotx")
 
 ---
 
-## 10. Customising
+## 11. Customising
 
 **Add a preset** — add an entry to `presets.json`. Only the keys you want to
 override; they merge over the current settings.
@@ -267,7 +282,7 @@ It appears on the page and in the saved file.
 
 ---
 
-## 11. Files
+## 12. Files
 
 ```
 app.py                 Server, settings schema, feedback questions, routes
@@ -288,7 +303,7 @@ CHANGELOG.md           What changed in each version
 
 ---
 
-## 12. Troubleshooting
+## 13. Troubleshooting
 
 | Problem | Fix |
 |---|---|
@@ -304,7 +319,7 @@ CHANGELOG.md           What changed in each version
 
 ---
 
-## 13. Notes
+## 14. Notes
 
 - The output is a real template. The file declares the Word template content
   type, not just a renamed `.docx`.
