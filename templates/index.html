@@ -92,6 +92,29 @@
     gap: 12px 16px; padding: 14px 16px 18px;
   }
 
+  /* A section with a fixed column count. Fields keep their order and land in
+     a true grid. Every label gets the same reserved height and sits at the
+     bottom of it, so the controls underneath all start on the same line
+     whether a label wraps or not. Help text hangs below the control, where it
+     cannot pull its cell out of line with the rest of the row. */
+  .grid.fixed { align-items: start; row-gap: 16px; }
+  .grid.fixed .field label {
+    display: flex; align-items: flex-end; min-height: 2.4em; margin: 0;
+  }
+  /* A text box, a dropdown and a toggle have three different intrinsic
+     heights. Pinning them to one value makes each row share a top and a
+     bottom edge rather than only a top. */
+  .grid.fixed .switch,
+  .grid.fixed input[type=text],
+  .grid.fixed select { height: 34px; }
+  .grid.fixed .switch { padding-top: 0; }
+  .grid.fixed .field .help { margin-top: 1px; }
+
+  @media (max-width: 760px) {
+    .grid.fixed { grid-template-columns: minmax(0, 1fr) !important; }
+    .grid.fixed .field label { min-height: 0; }
+  }
+
   .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
   .field label { font-size: 12px; font-weight: 600; color: var(--dark3); }
   .field .help { font-size: 11px; color: var(--muted); }
@@ -120,7 +143,10 @@
   .color-wrap input[type=text] { text-transform: uppercase; font-family: ui-monospace, Consolas, monospace; }
 
   .switch { display: flex; align-items: center; gap: 8px; padding-top: 3px; }
-  .switch input { appearance: none; width: 36px; height: 20px; border-radius: 10px;
+  /* margin:0 drops the browser's default checkbox margin, which otherwise
+     insets the toggle 4px and leaves it out of line with the text boxes and
+     dropdowns above and below it. */
+  .switch input { appearance: none; margin: 0; width: 36px; height: 20px; border-radius: 10px;
     background: var(--warm-gray); position: relative; cursor: pointer;
     transition: background .15s; flex: none; border: 1px solid var(--border); }
   .switch input:checked { background: var(--green); border-color: var(--green); }
@@ -533,6 +559,11 @@ function renderForm() {
 
     const grid = document.createElement('div');
     grid.className = 'grid';
+    if (section.columns) {
+      grid.classList.add('fixed');
+      grid.style.gridTemplateColumns =
+        `repeat(${section.columns}, minmax(0, 1fr))`;
+    }
     section.fields.forEach(field => grid.appendChild(buildField(field)));
     card.appendChild(grid);
     form.appendChild(card);

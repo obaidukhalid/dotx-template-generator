@@ -245,7 +245,7 @@ def _header_footer_group():
     """
     fields = [
         {"path": "header_footer.different_first_page",
-         "label": "Blank header and footer on page 1", "type": "bool",
+         "label": "Blank header/footer on page 1", "type": "bool",
          "help": "Keeps the cover page clear."},
         {"path": "header_footer.page_number.enabled",
          "label": "Show page number", "type": "bool"},
@@ -343,6 +343,8 @@ SCHEMA = [
         "hint": "Three positions in the header and three in the footer. Each "
                 "holds one field, so picking a position removes it from the "
                 "other lists. Nothing here is linked to the document text.",
+        # One row per field: the switch, what it shows, and where it goes.
+        "columns": 3,
         "fields": _header_footer_group(),
     },
     {
