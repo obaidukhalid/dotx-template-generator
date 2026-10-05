@@ -24,7 +24,7 @@ from urllib.parse import quote
 
 from flask import Flask, jsonify, request, send_file, render_template
 
-from template_builder import build_template
+from template_builder import SlotConflict, build_template
 from template_reader import TemplateReadError, read_template
 
 APP_VERSION = "0.2"
@@ -222,6 +222,68 @@ def _text_style_fields(base, include_line_spacing=True, include_caps=False,
     return fields
 
 
+# Header and footer positions. Six exist, and each takes one field, so the
+# GUI removes a position from every other list as soon as it is claimed. The
+# "slot" field type below is what carries that behaviour into the form.
+SLOT_OPTIONS = [
+    ["", "Not shown"],
+    ["header_left", "Header left"],
+    ["header_center", "Header centre"],
+    ["header_right", "Header right"],
+    ["footer_left", "Footer left"],
+    ["footer_center", "Footer centre"],
+    ["footer_right", "Footer right"],
+]
+
+# Label and optional extra inputs for each field that can claim a position.
+PLACEABLE_FIELDS = [
+    ("page_number", "Page number", None),
+    ("static_text", "Fixed text", "text"),
+    ("author", "Author (from the cover)", None),
+    ("doc_title", "Document title (from the cover)", None),
+]
+
+
+def _slot_field_group():
+    """Build the Header and footer section: one row per placeable field."""
+    fields = [
+        {"path": "header_footer.different_first_page",
+         "label": "Blank header and footer on page 1", "type": "bool",
+         "help": "Keeps the cover page clear."},
+    ]
+    for key, label, extra in PLACEABLE_FIELDS:
+        fields.append({"path": f"header_footer.{key}.enabled",
+                       "label": f"Show {label.lower()}", "type": "bool"})
+        if extra == "text":
+            fields.append({"path": f"header_footer.{key}.text",
+                           "label": f"{label} to show", "type": "text"})
+        fields.append({"path": f"header_footer.{key}.slot",
+                       "label": f"{label} position", "type": "slot",
+                       "options": SLOT_OPTIONS})
+    return fields
+
+
+def _custom_field_group():
+    """Build the Custom fields section: name, value and position for each."""
+    fields = []
+    for number in range(1, 5):
+        key = f"custom_{number}"
+        fields += [
+            {"path": f"header_footer.{key}.enabled",
+             "label": f"Use custom field {number}", "type": "bool"},
+            {"path": f"header_footer.{key}.name",
+             "label": f"Field {number} name", "type": "text",
+             "help": "Shown as the label on the cover page."},
+            {"path": f"header_footer.{key}.value",
+             "label": f"Field {number} starting value", "type": "text",
+             "help": "Leave empty to show the name in brackets."},
+            {"path": f"header_footer.{key}.slot",
+             "label": f"Field {number} position", "type": "slot",
+             "options": SLOT_OPTIONS},
+        ]
+    return fields
+
+
 SCHEMA = [
     {
         "id": "template",
@@ -290,11 +352,23 @@ SCHEMA = [
              "type": "text"},
             {"path": "document.reference_placeholder",
              "label": "Cover reference", "type": "text"},
-            {"path": "document.header_text", "label": "Page header text",
-             "type": "text", "help": "Leave empty for no header."},
-            {"path": "document.page_numbers",
-             "label": "Page number in footer", "type": "bool"},
         ],
+    },
+    {
+        "id": "header_footer",
+        "title": "Header and footer",
+        "hint": "A header and a footer have three positions each: left, "
+                "centre and right. Each position holds one field, so picking "
+                "a position removes it from the other lists.",
+        "fields": _slot_field_group(),
+    },
+    {
+        "id": "custom_fields",
+        "title": "Custom fields",
+        "hint": "Four fields of your own. Each one gets a line on the cover "
+                "page and a copy in the header or footer position you pick. "
+                "Type the value on the cover and the copy follows.",
+        "fields": _custom_field_group(),
     },
     {
         "id": "heading_1",
@@ -756,6 +830,10 @@ def api_generate():
 
     try:
         build_template(config, output_path)
+    except SlotConflict as error:
+        # The GUI stops this, but the API is reachable on its own and a
+        # hand-edited config.json can also get here.
+        return jsonify({"ok": False, "error": str(error)})
     except Exception as error:  # surfaced to the user in the GUI
         return jsonify({"ok": False, "error": f"{type(error).__name__}: {error}"})
 

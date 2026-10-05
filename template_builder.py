@@ -18,9 +18,12 @@ import zipfile
 from docx import Document
 from docx.enum.section import WD_ORIENT
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK
+from docx.opc.packuri import PackURI
+from docx.opc.part import Part
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Emu, Mm, Pt, RGBColor, Twips
+from lxml import etree
 
 # ----------------------------------------------------------------------------
 # Constants
@@ -43,6 +46,91 @@ DOTX_MAIN_CT = (
 )
 
 HEADING_KEYS = ["heading_1", "heading_2", "heading_3", "heading_4"]
+
+# ----------------------------------------------------------------------------
+# Mapped document properties
+#
+# A Word field such as { AUTHOR } reads the file's saved metadata, so typing a
+# name on the title page would not change it. What does stay in sync is a
+# data bound content control: two controls pointing at the same XML node track
+# each other as the user types, with no field update. That is the mechanism
+# behind Word's own Quick Parts, Document Property.
+#
+# Author and the document title bind to the package's core properties, which
+# Word exposes under a fixed store id. Custom fields have nothing to bind to
+# until we add a custom XML part of our own, which _add_custom_xml_part does.
+# ----------------------------------------------------------------------------
+
+CORE_STORE_ID = "{6C3C8BC8-F283-45AE-878A-BAB7291924A1}"
+CORE_PREFIX_MAPPINGS = (
+    "xmlns:ns0='http://purl.org/dc/elements/1.1/' "
+    "xmlns:ns1='http://schemas.openxmlformats.org/package/2006/metadata/"
+    "core-properties'"
+)
+CORE_TITLE_XPATH = "/ns1:coreProperties[1]/ns0:title[1]"
+CORE_AUTHOR_XPATH = "/ns1:coreProperties[1]/ns0:creator[1]"
+
+STUDIO_NS = "http://v-embed.com/schemas/templatestudio/fields"
+STUDIO_PREFIX_MAPPINGS = "xmlns:ts='%s'" % STUDIO_NS
+STUDIO_STORE_ID = "{1D2E3F40-5A6B-4C7D-8E9F-0A1B2C3D4E5F}"
+
+RT_CUSTOM_XML = (
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+    "customXml"
+)
+RT_CUSTOM_XML_PROPS = (
+    "http://schemas.openxmlformats.org/officeDocument/2006/relationships/"
+    "customXmlProps"
+)
+CT_CUSTOM_XML_PROPS = (
+    "application/vnd.openxmlformats-officedocument.customXmlProperties+xml"
+)
+
+CUSTOM_FIELD_KEYS = ["custom_1", "custom_2", "custom_3", "custom_4"]
+
+# The six places a field can go. Word gives a header and a footer three
+# positions each, built from a left aligned start plus a centre and a right
+# tab stop, so there is nowhere else to put anything.
+SLOTS = [
+    "header_left", "header_center", "header_right",
+    "footer_left", "footer_center", "footer_right",
+]
+
+# Every field that can claim a slot, in the order they are resolved.
+PLACEABLE_KEYS = (
+    ["page_number", "static_text", "author", "doc_title"] + CUSTOM_FIELD_KEYS
+)
+
+
+class SlotConflict(Exception):
+    """Two enabled fields asked for the same header or footer position."""
+
+
+def resolve_slots(config):
+    """
+    Return {slot: field_key} for the fields that are switched on.
+
+    Raises SlotConflict if two of them want the same position. The GUI stops
+    that happening, but the config can also arrive from the API or from a
+    hand-edited config.json, and silently dropping one of the two would leave
+    the user with a template that does not match what they asked for.
+    """
+    header_footer = config.get("header_footer") or {}
+    taken = {}
+    for key in PLACEABLE_KEYS:
+        field = header_footer.get(key) or {}
+        if not field.get("enabled"):
+            continue
+        slot = field.get("slot") or ""
+        if slot not in SLOTS:
+            continue
+        if slot in taken:
+            raise SlotConflict(
+                "%s and %s are both set to %s. Each position holds one field."
+                % (taken[slot], key, slot)
+            )
+        taken[slot] = key
+    return taken
 
 
 # ----------------------------------------------------------------------------
@@ -120,6 +208,176 @@ def _apply_paragraph_format(style, space_before=None, space_after=None,
         pf.left_indent = Twips(int(indent_left))
     if alignment is not None:
         pf.alignment = alignment
+
+
+def _run_props(run_el, font_name=None, size_pt=None, color_hex=None,
+               bold=None, italic=None):
+    """Apply run formatting to a bare w:r element."""
+    rpr = run_el.find(qn("w:rPr"))
+    if rpr is None:
+        rpr = OxmlElement("w:rPr")
+        run_el.insert(0, rpr)
+    if font_name:
+        rfonts = _get_or_add(rpr, "w:rFonts")
+        _clean_theme_attrs(
+            rfonts,
+            ["w:asciiTheme", "w:hAnsiTheme", "w:eastAsiaTheme", "w:cstheme"],
+        )
+        for attr in ("w:ascii", "w:hAnsi", "w:cs"):
+            rfonts.set(qn(attr), font_name)
+    if size_pt is not None:
+        size = _get_or_add(rpr, "w:sz")
+        size.set(qn("w:val"), str(int(round(float(size_pt) * 2))))
+    if color_hex:
+        color = _get_or_add(rpr, "w:color")
+        _clean_theme_attrs(color, ["w:themeColor", "w:themeShade", "w:themeTint"])
+        color.set(qn("w:val"), color_hex.upper().lstrip("#"))
+    if bold:
+        _get_or_add(rpr, "w:b")
+    if italic:
+        _get_or_add(rpr, "w:i")
+    return run_el
+
+
+def _text_run(text, **fmt):
+    run = OxmlElement("w:r")
+    node = OxmlElement("w:t")
+    node.set(qn("xml:space"), "preserve")
+    node.text = text
+    run.append(node)
+    return _run_props(run, **fmt)
+
+
+def _tab_run():
+    run = OxmlElement("w:r")
+    run.append(OxmlElement("w:tab"))
+    return run
+
+
+def _field_runs(instruction, placeholder=None, **fmt):
+    """A Word field as the run sequence begin / instruction / end."""
+    begin = OxmlElement("w:r")
+    char = OxmlElement("w:fldChar")
+    char.set(qn("w:fldCharType"), "begin")
+    begin.append(char)
+
+    middle = OxmlElement("w:r")
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = instruction
+    middle.append(instr)
+
+    runs = [begin, middle]
+
+    if placeholder is not None:
+        separate = OxmlElement("w:r")
+        sep = OxmlElement("w:fldChar")
+        sep.set(qn("w:fldCharType"), "separate")
+        separate.append(sep)
+        runs.append(separate)
+        runs.append(_text_run(placeholder, **fmt))
+
+    end = OxmlElement("w:r")
+    char = OxmlElement("w:fldChar")
+    char.set(qn("w:fldCharType"), "end")
+    end.append(char)
+    runs.append(end)
+
+    return [_run_props(r, **fmt) for r in runs]
+
+
+_SDT_ID = [1000]
+
+
+def _next_sdt_id():
+    _SDT_ID[0] += 1
+    return _SDT_ID[0]
+
+
+def _bound_control(alias, xpath, prefix_mappings, store_id, text, **fmt):
+    """
+    A run level content control whose text is bound to an XML node.
+
+    Word treats the bound node as the single source of truth: every control
+    pointing at the same xpath shows the same text and updates as any one of
+    them is typed into. `text` is what the node is seeded with, so it is also
+    what the control shows until the user changes it.
+    """
+    sdt = OxmlElement("w:sdt")
+
+    props = OxmlElement("w:sdtPr")
+    for tag, value in (("w:alias", alias), ("w:tag", alias)):
+        element = OxmlElement(tag)
+        element.set(qn("w:val"), value)
+        props.append(element)
+    identifier = OxmlElement("w:id")
+    identifier.set(qn("w:val"), str(_next_sdt_id()))
+    props.append(identifier)
+
+    binding = OxmlElement("w:dataBinding")
+    binding.set(qn("w:prefixMappings"), prefix_mappings)
+    binding.set(qn("w:xpath"), xpath)
+    binding.set(qn("w:storeItemID"), store_id)
+    props.append(binding)
+
+    props.append(OxmlElement("w:text"))
+    sdt.append(props)
+
+    content = OxmlElement("w:sdtContent")
+    content.append(_text_run(text, **fmt))
+    sdt.append(content)
+    return sdt
+
+
+def _custom_field_xpath(key):
+    return "/ts:fields[1]/ts:%s[1]" % key
+
+
+# Template details are kept here as well as in the core properties. Mapping
+# the document title or the author rebinds those two core properties to the
+# live value the user types on the cover, which leaves the template's own name
+# and author with nowhere else to live.
+STUDIO_META_KEYS = ["template_name", "template_author"]
+
+
+def _add_custom_xml_part(doc, values):
+    """
+    Add the custom XML part the custom fields bind to.
+
+    `values` maps custom_1..custom_4 and the template detail keys to their
+    text. Word needs the part, a properties part carrying the store id the
+    controls reference, and a relationship from the document; python-docx
+    writes the content type override and the .rels files from the parts
+    themselves.
+    """
+    package = doc.part.package
+
+    root = etree.Element("{%s}fields" % STUDIO_NS, nsmap={"ts": STUDIO_NS})
+    for key in CUSTOM_FIELD_KEYS + STUDIO_META_KEYS:
+        element = etree.SubElement(root, "{%s}%s" % (STUDIO_NS, key))
+        element.text = values.get(key, "")
+    item_xml = etree.tostring(
+        root, xml_declaration=True, encoding="UTF-8", standalone=True
+    )
+
+    props_xml = (
+        '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n'
+        '<ds:datastoreItem xmlns:ds="http://schemas.openxmlformats.org/'
+        'officeDocument/2006/customXml" ds:itemID="%s">'
+        '<ds:schemaRefs><ds:schemaRef ds:uri="%s"/></ds:schemaRefs>'
+        "</ds:datastoreItem>" % (STUDIO_STORE_ID, STUDIO_NS)
+    ).encode("utf-8")
+
+    # item1 belongs to the template python-docx starts from, so ours is item2.
+    item = Part(
+        PackURI("/customXml/item2.xml"), "application/xml", item_xml, package
+    )
+    props = Part(
+        PackURI("/customXml/itemProps2.xml"), CT_CUSTOM_XML_PROPS,
+        props_xml, package,
+    )
+    item.relate_to(props, RT_CUSTOM_XML_PROPS)
+    doc.part.relate_to(item, RT_CUSTOM_XML)
 
 
 def _ensure_style(doc, name, style_id=None, based_on="Normal"):
@@ -639,24 +897,37 @@ def _configure_page(doc, config):
 # ----------------------------------------------------------------------------
 
 def _add_cover(doc, config):
-    """Build a cover page from the configured placeholder text."""
+    """
+    Build a cover page from the configured placeholder text.
+
+    The title and author lines become bound content controls when those fields
+    are mapped into a header or footer, so typing over them on the cover
+    changes the header too. Everything else on the cover is ordinary text.
+    """
     doc_cfg = config.get("document", {})
+    header_footer = config.get("header_footer", {})
     headings = config["styles"]["headings"]
     body = config["styles"]["paragraph"]["body"]
 
     spacer = doc.add_paragraph()
     spacer.paragraph_format.space_before = Twips(1600)
 
+    title_fmt = {
+        "font_name": headings["heading_1"].get("font", "Calibri"),
+        "size_pt": float(headings["heading_1"].get("fontSize", 28)) + 4,
+        "color_hex": headings["heading_1"].get("color", "006600"),
+        "bold": True,
+    }
     title = doc.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = title.add_run(doc_cfg.get("title_placeholder", "Document Title"))
-    run.font.size = Pt(float(headings["heading_1"].get("fontSize", 28)) + 4)
-    run.font.bold = True
-    run.font.name = headings["heading_1"].get("font", "Calibri")
-    run.font.color.rgb = RGBColor.from_string(
-        headings["heading_1"].get("color", "006600").upper()
-    )
     title.paragraph_format.space_after = Twips(120)
+    title_text = doc_cfg.get("title_placeholder", "Document Title")
+    if (header_footer.get("doc_title") or {}).get("enabled"):
+        title._p.append(_bound_control(
+            "Title", CORE_TITLE_XPATH, CORE_PREFIX_MAPPINGS,
+            CORE_STORE_ID, title_text, **title_fmt))
+    else:
+        title._p.append(_text_run(title_text, **title_fmt))
 
     subtitle = doc.add_paragraph()
     subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -668,19 +939,47 @@ def _add_cover(doc, config):
     )
     subtitle.paragraph_format.space_after = Twips(900)
 
-    for line in (
-        doc_cfg.get("author_placeholder", "Author name"),
-        doc_cfg.get("date_placeholder", "Date"),
-        doc_cfg.get("reference_placeholder", "Document reference"),
-    ):
-        if not line:
-            continue
+    line_fmt = {
+        "font_name": body.get("font", "Calibri"),
+        "size_pt": float(body.get("fontSize", 11)),
+    }
+
+    def cover_line():
         paragraph = doc.add_paragraph()
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = paragraph.add_run(line)
-        run.font.size = Pt(float(body.get("fontSize", 11)))
-        run.font.name = body.get("font", "Calibri")
         paragraph.paragraph_format.space_after = Twips(60)
+        return paragraph
+
+    author_text = doc_cfg.get("author_placeholder", "Author name")
+    if author_text:
+        paragraph = cover_line()
+        if (header_footer.get("author") or {}).get("enabled"):
+            paragraph._p.append(_bound_control(
+                "Author", CORE_AUTHOR_XPATH, CORE_PREFIX_MAPPINGS,
+                CORE_STORE_ID, author_text, **line_fmt))
+        else:
+            paragraph._p.append(_text_run(author_text, **line_fmt))
+
+    for key in ("date_placeholder", "reference_placeholder"):
+        text = doc_cfg.get(key, "")
+        if not text:
+            continue
+        cover_line()._p.append(_text_run(text, **line_fmt))
+
+    # One labelled line per custom field, so there is somewhere to type the
+    # value that the header or footer copy then follows.
+    for key in CUSTOM_FIELD_KEYS:
+        field = header_footer.get(key) or {}
+        if not field.get("enabled"):
+            continue
+        name = (field.get("name") or "").strip()
+        paragraph = cover_line()
+        if name:
+            paragraph._p.append(_text_run("%s: " % name, **line_fmt))
+        paragraph._p.append(_bound_control(
+            name or key.replace("_", " ").title(),
+            _custom_field_xpath(key), STUDIO_PREFIX_MAPPINGS,
+            STUDIO_STORE_ID, _mapped_field_text(config, key), **line_fmt))
 
     doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
@@ -845,42 +1144,152 @@ def _add_outline(doc, config):
         placeholder.style = doc.styles["Body Text"]
 
 
-def _add_header_footer(doc, config):
-    """Add optional header text and a page number footer."""
+def _mapped_field_text(config, key):
+    """
+    The text a mapped field starts out showing.
+
+    The bound XML node is what Word displays, so this is also the initial
+    value of the underlying property. Author and the document title take the
+    cover placeholders, because the cover is where the user types them.
+    """
     doc_cfg = config.get("document", {})
+    header_footer = config.get("header_footer", {})
+    field = header_footer.get(key) or {}
+
+    if key == "author":
+        return doc_cfg.get("author_placeholder") or "Author name"
+    if key == "doc_title":
+        return doc_cfg.get("title_placeholder") or "Document Title"
+    if key == "static_text":
+        return field.get("text", "")
+    # A custom field with no value still needs something visible to click on.
+    name = (field.get("name") or "").strip()
+    return field.get("value") or ("[%s]" % name if name else "[Custom field]")
+
+
+def _slot_content(config, key, fmt):
+    """Return the run elements that render one field inside a header paragraph."""
+    header_footer = config.get("header_footer", {})
+    field = header_footer.get(key) or {}
+    text = _mapped_field_text(config, key)
+
+    if key == "page_number":
+        return _field_runs("PAGE", **fmt)
+    if key == "static_text":
+        return [_text_run(text, **fmt)]
+    if key == "author":
+        return [_bound_control(
+            "Author", CORE_AUTHOR_XPATH, CORE_PREFIX_MAPPINGS,
+            CORE_STORE_ID, text, **fmt)]
+    if key == "doc_title":
+        return [_bound_control(
+            "Title", CORE_TITLE_XPATH, CORE_PREFIX_MAPPINGS,
+            CORE_STORE_ID, text, **fmt)]
+
+    alias = (field.get("name") or "").strip() or key.replace("_", " ").title()
+    return [_bound_control(
+        alias, _custom_field_xpath(key), STUDIO_PREFIX_MAPPINGS,
+        STUDIO_STORE_ID, text, **fmt)]
+
+
+def _set_three_part_tabs(paragraph, section):
+    """
+    Give a header or footer paragraph a centre and a right tab stop.
+
+    This is how Word's own three part headers work: content starts at the left
+    margin, one tab jumps to the middle, a second to the right margin.
+    """
+    width = section.page_width - section.left_margin - section.right_margin
+    ppr = paragraph._p.get_or_add_pPr()
+    existing = ppr.find(qn("w:tabs"))
+    if existing is not None:
+        ppr.remove(existing)
+    tabs = OxmlElement("w:tabs")
+    for position, alignment in (
+        (int(Emu(int(width)).twips / 2), "center"),
+        (int(Emu(int(width)).twips), "right"),
+    ):
+        tab = OxmlElement("w:tab")
+        tab.set(qn("w:val"), alignment)
+        tab.set(qn("w:pos"), str(position))
+        tabs.append(tab)
+    ppr.append(tabs)
+
+
+def _fill_three_part(paragraph, section, config, assigned, area, fmt):
+    """
+    Lay out one header or footer: left content, tab, centre, tab, right.
+
+    The tabs are only emitted when something to their right needs them, so a
+    header holding nothing but a left hand field does not end in stray tabs.
+    """
+    keys = [assigned.get("%s_%s" % (area, side))
+            for side in ("left", "center", "right")]
+    if not any(keys):
+        return False
+
+    _set_three_part_tabs(paragraph, section)
+
+    # Clear whatever the starting template put here.
+    for child in list(paragraph._p):
+        if child.tag != qn("w:pPr"):
+            paragraph._p.remove(child)
+
+    left, center, right = keys
+    if left:
+        for element in _slot_content(config, left, fmt):
+            paragraph._p.append(element)
+    if center or right:
+        paragraph._p.append(_tab_run())
+    if center:
+        for element in _slot_content(config, center, fmt):
+            paragraph._p.append(element)
+    if right:
+        paragraph._p.append(_tab_run())
+        for element in _slot_content(config, right, fmt):
+            paragraph._p.append(element)
+    return True
+
+
+def _add_header_footer(doc, config):
+    """
+    Place the configured fields into the six header and footer positions.
+
+    Raises SlotConflict when two switched on fields want the same position.
+    """
+    header_footer = config.get("header_footer", {})
     section = doc.sections[0]
     body = config["styles"]["paragraph"]["body"]
     muted = config["styles"]["paragraph"]["caption"].get("color", "6B7280")
 
-    header_text = doc_cfg.get("header_text", "").strip()
-    if header_text:
-        paragraph = section.header.paragraphs[0]
-        paragraph.text = header_text
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        for run in paragraph.runs:
-            run.font.size = Pt(9)
-            run.font.name = body.get("font", "Calibri")
-            run.font.color.rgb = RGBColor.from_string(muted.upper())
+    assigned = resolve_slots(config)
 
-    if not doc_cfg.get("page_numbers", True):
-        return
+    fmt = {
+        "font_name": body.get("font", "Calibri"),
+        "size_pt": 9,
+        "color_hex": muted,
+    }
 
-    paragraph = section.footer.paragraphs[0]
-    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = paragraph.add_run()
-    run.font.size = Pt(9)
-    run.font.name = body.get("font", "Calibri")
-    run.font.color.rgb = RGBColor.from_string(muted.upper())
+    # Word calls this "Different first page". With a cover page it keeps the
+    # author and title out of the header on the page that already shows them
+    # in full.
+    section.different_first_page_header_footer = bool(
+        header_footer.get("different_first_page", True)
+    )
 
-    begin = OxmlElement("w:fldChar")
-    begin.set(qn("w:fldCharType"), "begin")
-    instr = OxmlElement("w:instrText")
-    instr.set(qn("xml:space"), "preserve")
-    instr.text = "PAGE"
-    end = OxmlElement("w:fldChar")
-    end.set(qn("w:fldCharType"), "end")
-    for element in (begin, instr, end):
-        run._r.append(element)
+    _fill_three_part(
+        section.header.paragraphs[0], section, config, assigned, "header", fmt
+    )
+    _fill_three_part(
+        section.footer.paragraphs[0], section, config, assigned, "footer", fmt
+    )
+
+    # The first page header and footer are separate parts. Leaving them
+    # untouched is what makes them blank.
+    if section.different_first_page_header_footer:
+        for container in (section.first_page_header, section.first_page_footer):
+            if container.paragraphs:
+                container.paragraphs[0].text = ""
 
 
 # ----------------------------------------------------------------------------
@@ -927,6 +1336,17 @@ def build_template(config, output_path):
 
     doc = Document()
 
+    header_footer = config.get("header_footer", {})
+    meta = config.get("template", {})
+    part_values = {
+        key: (_mapped_field_text(config, key)
+              if (header_footer.get(key) or {}).get("enabled") else "")
+        for key in CUSTOM_FIELD_KEYS
+    }
+    part_values["template_name"] = meta.get("name", "")
+    part_values["template_author"] = meta.get("author", "")
+    _add_custom_xml_part(doc, part_values)
+
     _configure_page(doc, config)
     _configure_styles(doc, config)
     _apply_heading_numbering(doc, config)
@@ -950,9 +1370,26 @@ def build_template(config, output_path):
     _enable_update_fields(doc)
 
     meta = config.get("template", {})
-    doc.core_properties.title = meta.get("name", "Document Template")
+    doc_cfg = config.get("document", {})
+
+    # The mapped fields are bound to these two properties, and Word shows the
+    # property, not whatever text a control was written with. So when a field
+    # is mapped, its property has to start out holding the cover placeholder
+    # the user is going to type over. Unmapped, they keep their old meaning as
+    # file metadata.
+    if (header_footer.get("doc_title") or {}).get("enabled"):
+        doc.core_properties.title = doc_cfg.get(
+            "title_placeholder") or meta.get("name", "Document Template")
+    else:
+        doc.core_properties.title = meta.get("name", "Document Template")
+
+    if (header_footer.get("author") or {}).get("enabled"):
+        doc.core_properties.author = doc_cfg.get(
+            "author_placeholder") or meta.get("author", "")
+    else:
+        doc.core_properties.author = meta.get("author", "")
+
     doc.core_properties.comments = meta.get("description", "")
-    doc.core_properties.author = meta.get("author", "")
     doc.core_properties.category = "Template"
 
     doc.save(output_path)

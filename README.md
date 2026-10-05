@@ -107,7 +107,9 @@ first.
 | Section | What it controls |
 |---|---|
 | Template details | Name, description and author stored in the file |
-| Document structure | Cover page, contents page, style guide, heading numbering, starter outline, header text, page numbers |
+| Document structure | Cover page, contents page, style guide, heading numbering, starter outline, cover placeholders |
+| Header and footer | Which field sits in each of the six positions |
+| Custom fields | Four fields of your own, with names and positions |
 | Heading 1 to 4 | Font, size, colour, bold, italic, all caps, spacing |
 | Body text | Font, size, colour, bold, italic, spacing, line spacing |
 | Caption | Same, for figure and table captions |
@@ -159,7 +161,47 @@ Handy twips values: 120 small gap, 240 one line at 12 pt, 360 generous.
 
 ---
 
-## 6. Send feedback
+## 6. Header and footer fields
+
+A header and a footer have three positions each: left, centre, right. **Six in
+total, one field per position.** Pick a position and it disappears from the
+other dropdowns.
+
+Fields you can place:
+
+- **Page number**
+- **Fixed text** — whatever you type
+- **Author** — the one from the cover page
+- **Document title** — the one from the cover page
+- **Four custom fields** — you name them
+
+### Live fields
+
+Author, document title and the custom fields appear **twice**: once on the
+cover page and once in the header or footer. Type the value on the cover and
+the header copy changes with it. No refresh, no F9.
+
+This works because they are content controls bound to the same data, not Word
+fields. A `{ AUTHOR }` field would read the file's saved metadata and ignore
+what you typed.
+
+Custom fields get a labelled line each on the cover page. Leave a value empty
+and the cover shows the field name in brackets, so there is something to click.
+
+**Blank header and footer on page 1** keeps the cover clear. On by default.
+
+### Worth knowing
+
+- Author and document title are the real Word Title and Author properties, so
+  they also show under File → Info.
+- Because of that, the template's own name and author are stored separately
+  inside the file, and still survive a reload.
+- Two fields cannot share a position. The tool refuses to build rather than
+  dropping one silently.
+
+---
+
+## 7. Send feedback
 
 1. Click **Feedback** at the top of the page.
 2. Answer the questions.
@@ -172,7 +214,7 @@ use **Copy to clipboard** or **Open feedback folder** and email the file to
 
 ---
 
-## 7. Use the template in Word
+## 8. Use the template in Word
 
 - Double click the `.dotx` — Word opens a **new document** based on it. That is
   what a template does.
@@ -190,7 +232,7 @@ List Bullet 2. Shortcuts `Ctrl+Alt+1/2/3` apply the first three heading levels.
 
 ---
 
-## 8. Use it from a script
+## 9. Use it from a script
 
 The engine runs without the GUI, for build pipelines or batch jobs:
 
@@ -206,7 +248,7 @@ build_template(config, "output/Report_Template.dotx")
 
 ---
 
-## 9. Customising
+## 10. Customising
 
 **Add a preset** — add an entry to `presets.json`. Only the keys you want to
 override; they merge over the current settings.
@@ -240,7 +282,7 @@ It appears on the page and in the saved file.
 
 ---
 
-## 10. Files
+## 11. Files
 
 ```
 app.py                 Server, settings schema, feedback questions, routes
@@ -261,7 +303,7 @@ CHANGELOG.md           What changed in each version
 
 ---
 
-## 11. Troubleshooting
+## 12. Troubleshooting
 
 | Problem | Fix |
 |---|---|
@@ -277,7 +319,7 @@ CHANGELOG.md           What changed in each version
 
 ---
 
-## 12. Notes
+## 13. Notes
 
 - The output is a real template. The file declares the Word template content
   type, not just a renamed `.docx`.

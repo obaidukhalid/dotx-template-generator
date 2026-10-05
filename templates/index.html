@@ -220,6 +220,17 @@
     margin: 4px 0 8px; color: var(--muted); max-width: 70ch;
   }
 
+  /* header and footer strips in the preview */
+  .pv-strip {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    font-size: 9px; padding: 4px 0; gap: 6px;
+  }
+  .pv-strip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pv-strip span:nth-child(2) { text-align: center; }
+  .pv-strip span:nth-child(3) { text-align: right; }
+  .pv-header { border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+  .pv-footer { border-top: 1px solid var(--border); margin-top: 10px; }
+
   @media (max-width: 1180px) {
     .layout { grid-template-columns: 1fr; }
     nav, aside.preview { position: static; }
@@ -307,6 +318,56 @@ const normHex = v => {
   return /^[0-9A-F]{6}$/.test(v) ? v : null;
 };
 
+// ---------- header and footer positions ----------
+// Each slot select is registered here so they can all be rebuilt whenever a
+// position is claimed or released.
+let SLOT_SELECTS = [];
+
+// The owning field key for a slot path, e.g. header_footer.author.slot -> author
+const slotFieldKey = path => path.split('.')[1];
+
+const fieldEnabled = key => !!getPath(CONFIG, `header_footer.${key}.enabled`);
+
+function takenSlots(exceptKey) {
+  const taken = {};
+  SLOT_SELECTS.forEach(({ field }) => {
+    const key = slotFieldKey(field.path);
+    if (key === exceptKey || !fieldEnabled(key)) return;
+    const value = getPath(CONFIG, field.path);
+    if (value) taken[value] = key;
+  });
+  return taken;
+}
+
+function refreshSlotOptions() {
+  SLOT_SELECTS.forEach(({ select, field }) => {
+    const key = slotFieldKey(field.path);
+    const current = getPath(CONFIG, field.path) || '';
+    const taken = takenSlots(key);
+
+    select.innerHTML = '';
+    field.options.forEach(([value, label]) => {
+      // Keep "Not shown" and this field's own choice; drop the rest.
+      if (value && taken[value]) return;
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      if (value === current) option.selected = true;
+      select.appendChild(option);
+    });
+
+    // The saved position may have been taken while this field was switched
+    // off. Fall back to Not shown rather than showing a stale value.
+    if (current && taken[current]) {
+      setPath(CONFIG, field.path, '');
+      select.value = '';
+    }
+    select.disabled = !fieldEnabled(key);
+    select.title = select.disabled
+      ? 'Switch the field on to give it a position' : '';
+  });
+}
+
 // ---------- form building ----------
 function buildField(field) {
   const wrap = document.createElement('div');
@@ -324,7 +385,11 @@ function buildField(field) {
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.checked = !!value;
-    input.onchange = () => { setPath(CONFIG, field.path, input.checked); refreshPreview(); };
+    input.onchange = () => {
+      setPath(CONFIG, field.path, input.checked);
+      if (field.path.startsWith('header_footer.')) refreshSlotOptions();
+      refreshPreview();
+    };
     const text = document.createElement('span');
     text.textContent = input.checked ? 'On' : 'Off';
     input.addEventListener('change', () => text.textContent = input.checked ? 'On' : 'Off');
@@ -350,6 +415,19 @@ function buildField(field) {
       select.insertBefore(option, select.firstChild);
     }
     select.onchange = () => { setPath(CONFIG, field.path, select.value); refreshPreview(); };
+    wrap.appendChild(select);
+
+  } else if (field.type === 'slot') {
+    // Six positions exist and each holds one field, so every slot select
+    // hides the positions other switched-on fields have already claimed.
+    const select = document.createElement('select');
+    select.dataset.slotPath = field.path;
+    SLOT_SELECTS.push({ select, field });
+    select.onchange = () => {
+      setPath(CONFIG, field.path, select.value);
+      refreshSlotOptions();
+      refreshPreview();
+    };
     wrap.appendChild(select);
 
   } else if (field.type === 'number') {
@@ -419,6 +497,7 @@ function renderForm() {
   const form = document.getElementById('form');
   const nav = document.getElementById('nav');
   form.innerHTML = ''; nav.innerHTML = '';
+  SLOT_SELECTS = [];
 
   SCHEMA.forEach(section => {
     const link = document.createElement('a');
@@ -447,6 +526,7 @@ function renderForm() {
     form.appendChild(card);
   });
 
+  refreshSlotOptions();
   setupScrollSpy();
 }
 
@@ -482,9 +562,45 @@ function styleString(spec, extra) {
   return parts.join(';') + (extra ? ';' + extra : '');
 }
 
+// Mirrors _mapped_field_text in template_builder.py
+function slotText(key) {
+  const d = CONFIG.document || {}, f = getPath(CONFIG, 'header_footer.' + key) || {};
+  if (key === 'page_number') return '1';
+  if (key === 'static_text') return f.text || '';
+  if (key === 'author') return d.author_placeholder || 'Author name';
+  if (key === 'doc_title') return d.title_placeholder || 'Document Title';
+  const name = (f.name || '').trim();
+  return f.value || (name ? '[' + name + ']' : '[Custom field]');
+}
+
+function slotStrip(area) {
+  const hf = CONFIG.header_footer || {};
+  const keys = ['page_number', 'static_text', 'author', 'doc_title',
+                'custom_1', 'custom_2', 'custom_3', 'custom_4'];
+  const cells = { left: '', center: '', right: '' };
+  let used = false;
+
+  keys.forEach(key => {
+    const f = hf[key] || {};
+    if (!f.enabled || !f.slot) return;
+    const [slotArea, side] = [f.slot.split('_')[0], f.slot.split('_')[1]];
+    if (slotArea !== area) return;
+    cells[side] = escapeHtml(slotText(key));
+    used = true;
+  });
+
+  if (!used) return '';
+  const muted = CONFIG.styles.paragraph.caption.color || '6B7280';
+  const font = CONFIG.styles.paragraph.body.font || 'Calibri';
+  return `<div class="pv-strip pv-${area}" style="font-family:'${font}',sans-serif;color:#${muted}">
+    <span>${cells.left}</span><span>${cells.center}</span><span>${cells.right}</span></div>`;
+}
+
 function refreshPreview() {
   const s = CONFIG.styles, h = s.headings, b = s.paragraph.body;
   const out = [];
+
+  out.push(slotStrip('header'));
 
   const toc = s.toc;
   out.push(`<div style="${styleString({
@@ -525,6 +641,8 @@ function refreshPreview() {
     const q = s.paragraph.quote;
     out.push(`<div style="${styleString(q, `padding-left:${(q.indent * TW).toFixed(1)}px;border-left:2px solid #c8ddd0`)}">Quote block text</div>`);
   }
+
+  out.push(slotStrip('footer'));
 
   document.getElementById('preview').innerHTML = out.join('');
 }

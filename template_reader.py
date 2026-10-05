@@ -26,13 +26,18 @@ import zipfile
 
 from docx import Document
 from docx.oxml.ns import qn
+from lxml import etree
 
 from template_builder import (
+    CUSTOM_FIELD_KEYS,
+    STUDIO_META_KEYS,
     DOCX_MAIN_CT,
     DOTX_MAIN_CT,
     HEADING_KEYS,
     HEADING_NUMBER_FORMATS,
     PAGE_SIZES,
+    PLACEABLE_KEYS,
+    STUDIO_NS,
 )
 
 # Sections of a cover page, in the order _add_cover writes them.
@@ -465,6 +470,29 @@ def _instr_texts(doc):
     return texts
 
 
+def _paragraph_text(paragraph):
+    """
+    All the text in a paragraph, including text inside content controls.
+
+    python-docx's Paragraph.text only walks direct w:r children, so a cover
+    line that is a bound control reads as empty and every placeholder after it
+    shifts up one.
+    """
+    parts = []
+    for node in paragraph._p.iter(qn("w:t")):
+        if node.text:
+            parts.append(node.text)
+    return "".join(parts).strip()
+
+
+def _has_custom_binding(paragraph):
+    """True when the paragraph carries a control bound to one of our fields."""
+    for binding in paragraph._p.iter(qn("w:dataBinding")):
+        if "ts:custom_" in (binding.get(qn("w:xpath")) or ""):
+            return True
+    return False
+
+
 def _read_document_structure(doc, document_cfg, toc_cfg, report):
     """
     Work out which of the optional blocks the template was built with.
@@ -483,10 +511,6 @@ def _read_document_structure(doc, document_cfg, toc_cfg, report):
         if match:
             toc_cfg["levels"] = match.group(1)
     report.record("Contents page", toc_field is not None)
-
-    document_cfg["page_numbers"] = any(
-        t.upper().startswith("PAGE") for t in instructions
-    )
 
     heading_1_texts = [
         p.text.strip() for p in doc.paragraphs
@@ -507,12 +531,17 @@ def _read_document_structure(doc, document_cfg, toc_cfg, report):
     )
 
     # The cover is the opening run of centred paragraphs, before any heading.
+    # The lines for custom fields sit at the end of it and are read from the
+    # header instead, so they stop the run rather than shifting every
+    # placeholder down by one.
     cover_lines = []
     for paragraph in doc.paragraphs:
         name = paragraph.style.name if paragraph.style is not None else ""
         if name.startswith("Heading") or name.startswith("TOC"):
             break
-        text = paragraph.text.strip()
+        if _has_custom_binding(paragraph):
+            break
+        text = _paragraph_text(paragraph)
         # alignment 1 is centred; python-docx exposes it as an enum that
         # compares equal to its integer value.
         if text and paragraph.alignment is not None and int(paragraph.alignment) == 1:
@@ -525,26 +554,196 @@ def _read_document_structure(doc, document_cfg, toc_cfg, report):
         document_cfg[key] = text
     report.record("Cover page", bool(cover_lines))
 
-    header_text = ""
-    if doc.sections:
-        paragraphs = doc.sections[0].header.paragraphs
-        if paragraphs:
-            header_text = paragraphs[0].text.strip()
-    document_cfg["header_text"] = header_text
-    report.record("Page header text", bool(header_text))
 
 
-def _read_metadata(doc, template_cfg, report):
+
+def _slot_items(paragraph):
+    """
+    Walk a header or footer paragraph and say what sits at each position.
+
+    Position is decided by how many tabs have been passed: none means left,
+    one means centre, two means right. That is the same rule the builder lays
+    the paragraph out by.
+    """
+    items = {"left": None, "center": None, "right": None}
+    sides = ["left", "center", "right"]
+    index = 0
+    in_field = False
+
+    for child in paragraph._p:
+        tag = child.tag
+
+        if tag == qn("w:sdt"):
+            binding = child.find(".//" + qn("w:dataBinding"))
+            alias = child.find(".//" + qn("w:alias"))
+            if binding is None or index >= len(sides):
+                continue
+            xpath = binding.get(qn("w:xpath")) or ""
+            name = alias.get(qn("w:val")) if alias is not None else ""
+            items[sides[index]] = ("bound", xpath, name)
+            continue
+
+        if tag != qn("w:r"):
+            continue
+
+        if child.find(qn("w:tab")) is not None:
+            index += 1
+            continue
+
+        char = child.find(qn("w:fldChar"))
+        if char is not None:
+            kind = char.get(qn("w:fldCharType"))
+            if kind == "begin":
+                in_field = True
+            elif kind == "end":
+                in_field = False
+            continue
+
+        instruction = child.find(qn("w:instrText"))
+        if instruction is not None:
+            if (instruction.text or "").strip().upper().startswith("PAGE") \
+                    and index < len(sides):
+                items[sides[index]] = ("page", "", "")
+            continue
+
+        node = child.find(qn("w:t"))
+        if node is not None and not in_field and index < len(sides):
+            text = (node.text or "").strip()
+            if text:
+                items[sides[index]] = ("text", "", text)
+
+    return items
+
+
+def _read_header_footer(doc, header_footer, report):
+    """Recover which field sits in each of the six positions."""
+    if not doc.sections:
+        report.defaulted.append("Header and footer")
+        return
+    section = doc.sections[0]
+
+    header_footer["different_first_page"] = bool(
+        section.different_first_page_header_footer
+    )
+
+    # Start from nothing placed, so a position the file leaves empty does not
+    # keep whatever the previous config had in it.
+    for key in PLACEABLE_KEYS:
+        field = header_footer.setdefault(key, {})
+        field["enabled"] = False
+        field["slot"] = ""
+
+    found, custom_found = False, False
+    custom_slots = {}
+
+    for area, container in (("header", section.header),
+                            ("footer", section.footer)):
+        if not container.paragraphs:
+            continue
+        for side, item in _slot_items(container.paragraphs[0]).items():
+            if item is None:
+                continue
+            kind, xpath, name = item
+            slot = "%s_%s" % (area, side)
+
+            if kind == "page":
+                key = "page_number"
+            elif kind == "text":
+                key = "static_text"
+                header_footer[key]["text"] = name
+            elif "title" in xpath:
+                key = "doc_title"
+            elif "creator" in xpath:
+                key = "author"
+            else:
+                match = re.search(r"custom_(\d)", xpath)
+                if not match:
+                    continue
+                key = "custom_%s" % match.group(1)
+                if key not in CUSTOM_FIELD_KEYS:
+                    continue
+                header_footer[key]["name"] = name
+                custom_slots[key] = slot
+                custom_found = True
+
+            header_footer[key]["enabled"] = True
+            header_footer[key]["slot"] = slot
+            found = True
+
+    # Custom field starting values live in the custom XML part, not the header.
+    for key, value in _custom_xml_values(doc).items():
+        if key in CUSTOM_FIELD_KEYS and isinstance(
+                header_footer.get(key), dict):
+            header_footer[key]["value"] = value
+
+    report.record("Header and footer positions", found)
+    report.record("Custom fields", custom_found)
+
+
+def _custom_xml_values(doc):
+    """Read the starting values out of our own custom XML part, if present."""
+    values = {}
+    try:
+        parts = doc.part.package.iter_parts()
+    except AttributeError:
+        return values
+    for part in parts:
+        if "customXml/item" not in str(part.partname):
+            continue
+        try:
+            root = etree.fromstring(part.blob)
+        except Exception:
+            continue
+        if not str(root.tag).startswith("{%s}" % STUDIO_NS):
+            continue
+        for element in root:
+            key = etree.QName(element).localname
+            if key in CUSTOM_FIELD_KEYS or key in STUDIO_META_KEYS:
+                values[key] = element.text or ""
+    return values
+
+
+def _read_metadata(doc, template_cfg, document_cfg, header_footer, report):
+    """
+    Read the file properties into the template details.
+
+    Mapping the document title or the author into a header changes what those
+    two properties mean: they stop being file metadata and become the live
+    value the user types on the cover. So when a field is mapped, its property
+    is read into the cover placeholder and the template detail is left alone,
+    or importing a file would overwrite the template name with a cover
+    placeholder.
+    """
     props = doc.core_properties
     found = False
-    for key, value in (
-        ("name", props.title),
-        ("description", props.comments),
-        ("author", props.author),
+
+    if props.comments:
+        template_cfg["description"] = props.comments
+        found = True
+
+    # Written by this tool, and the only place the template's own name and
+    # author survive once those core properties are bound to live fields.
+    stored = _custom_xml_values(doc)
+    for stored_key, detail_key in (
+        ("template_name", "name"), ("template_author", "author"),
     ):
-        if value:
-            template_cfg[key] = value
+        if stored.get(stored_key):
+            template_cfg[detail_key] = stored[stored_key]
             found = True
+
+    for prop, mapped_key, detail_key, cover_key in (
+        (props.title, "doc_title", "name", "title_placeholder"),
+        (props.author, "author", "author", "author_placeholder"),
+    ):
+        if not prop:
+            continue
+        found = True
+        if (header_footer.get(mapped_key) or {}).get("enabled"):
+            document_cfg[cover_key] = prop
+        elif not stored.get("template_name" if detail_key == "name"
+                            else "template_author"):
+            template_cfg[detail_key] = prop
+
     report.record("Template details", found)
 
 
@@ -654,7 +853,13 @@ def read_template(source, defaults):
         _read_document_structure(
             doc, config["document"], styles["toc"], report,
         )
-        _read_metadata(doc, config["template"], report)
+        _read_header_footer(
+            doc, config.setdefault("header_footer", {}), report,
+        )
+        _read_metadata(
+            doc, config["template"], config["document"],
+            config.get("header_footer", {}), report,
+        )
 
         # Inline run styles are applied as direct formatting rather than as
         # character styles, so there is nothing in the file to read them from.
