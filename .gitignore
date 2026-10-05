@@ -230,13 +230,3 @@ feedback/*
 *.dotx
 *.dotm
 
-#   Windows executable build. Kept on the maintainer's machine, deliberately
-#   not in the repo: this is a Python project that is cloned and run in a
-#   Python environment, and the build tooling is Windows-only noise for
-#   anyone doing that.
-.build-venv/
-build/
-dist/
-*.exe
-TemplateStudio.spec
-build_windows_exe.ps1

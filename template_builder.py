@@ -44,6 +44,58 @@ DOTX_MAIN_CT = (
 
 HEADING_KEYS = ["heading_1", "heading_2", "heading_3", "heading_4"]
 
+# ----------------------------------------------------------------------------
+# Header and footer fields
+#
+# A header and a footer have three positions each, built from a left aligned
+# start plus a centre and a right tab stop. That is six places in total and
+# there is nowhere else to put anything, so each one holds a single field.
+#
+# The fields are self contained: a page number, or a line of text the user
+# typed. Nothing here reads or writes the document body.
+# ----------------------------------------------------------------------------
+
+CUSTOM_FIELD_KEYS = ["custom_%d" % n for n in range(1, 7)]
+
+SLOTS = [
+    "header_left", "header_center", "header_right",
+    "footer_left", "footer_center", "footer_right",
+]
+
+# Every field that can claim a slot, in the order they are resolved.
+PLACEABLE_KEYS = ["page_number"] + CUSTOM_FIELD_KEYS
+
+
+class SlotConflict(Exception):
+    """Two enabled fields asked for the same header or footer position."""
+
+
+def resolve_slots(config):
+    """
+    Return {slot: field_key} for the fields that are switched on.
+
+    Raises SlotConflict if two of them want the same position. The GUI stops
+    that happening, but the config can also arrive from the API or from a
+    hand-edited config.json, and silently dropping one of the two would leave
+    the user with a template that does not match what they asked for.
+    """
+    header_footer = config.get("header_footer") or {}
+    taken = {}
+    for key in PLACEABLE_KEYS:
+        field = header_footer.get(key) or {}
+        if not field.get("enabled"):
+            continue
+        slot = field.get("slot") or ""
+        if slot not in SLOTS:
+            continue
+        if slot in taken:
+            raise SlotConflict(
+                "%s and %s are both set to %s. Each position holds one field."
+                % (taken[slot], key, slot)
+            )
+        taken[slot] = key
+    return taken
+
 
 # ----------------------------------------------------------------------------
 # Low level XML helpers
@@ -120,6 +172,82 @@ def _apply_paragraph_format(style, space_before=None, space_after=None,
         pf.left_indent = Twips(int(indent_left))
     if alignment is not None:
         pf.alignment = alignment
+
+
+def _run_props(run_el, font_name=None, size_pt=None, color_hex=None,
+               bold=None, italic=None):
+    """Apply run formatting to a bare w:r element."""
+    rpr = run_el.find(qn("w:rPr"))
+    if rpr is None:
+        rpr = OxmlElement("w:rPr")
+        run_el.insert(0, rpr)
+    if font_name:
+        rfonts = _get_or_add(rpr, "w:rFonts")
+        _clean_theme_attrs(
+            rfonts,
+            ["w:asciiTheme", "w:hAnsiTheme", "w:eastAsiaTheme", "w:cstheme"],
+        )
+        for attr in ("w:ascii", "w:hAnsi", "w:cs"):
+            rfonts.set(qn(attr), font_name)
+    if size_pt is not None:
+        size = _get_or_add(rpr, "w:sz")
+        size.set(qn("w:val"), str(int(round(float(size_pt) * 2))))
+    if color_hex:
+        color = _get_or_add(rpr, "w:color")
+        _clean_theme_attrs(color, ["w:themeColor", "w:themeShade", "w:themeTint"])
+        color.set(qn("w:val"), color_hex.upper().lstrip("#"))
+    if bold:
+        _get_or_add(rpr, "w:b")
+    if italic:
+        _get_or_add(rpr, "w:i")
+    return run_el
+
+
+def _text_run(text, **fmt):
+    run = OxmlElement("w:r")
+    node = OxmlElement("w:t")
+    node.set(qn("xml:space"), "preserve")
+    node.text = text
+    run.append(node)
+    return _run_props(run, **fmt)
+
+
+def _tab_run():
+    run = OxmlElement("w:r")
+    run.append(OxmlElement("w:tab"))
+    return run
+
+
+def _field_runs(instruction, placeholder=None, **fmt):
+    """A Word field as the run sequence begin / instruction / end."""
+    begin = OxmlElement("w:r")
+    char = OxmlElement("w:fldChar")
+    char.set(qn("w:fldCharType"), "begin")
+    begin.append(char)
+
+    middle = OxmlElement("w:r")
+    instr = OxmlElement("w:instrText")
+    instr.set(qn("xml:space"), "preserve")
+    instr.text = instruction
+    middle.append(instr)
+
+    runs = [begin, middle]
+
+    if placeholder is not None:
+        separate = OxmlElement("w:r")
+        sep = OxmlElement("w:fldChar")
+        sep.set(qn("w:fldCharType"), "separate")
+        separate.append(sep)
+        runs.append(separate)
+        runs.append(_text_run(placeholder, **fmt))
+
+    end = OxmlElement("w:r")
+    char = OxmlElement("w:fldChar")
+    char.set(qn("w:fldCharType"), "end")
+    end.append(char)
+    runs.append(end)
+
+    return [_run_props(r, **fmt) for r in runs]
 
 
 def _ensure_style(doc, name, style_id=None, based_on="Normal"):
@@ -649,38 +777,38 @@ def _add_cover(doc, config):
 
     title = doc.add_paragraph()
     title.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = title.add_run(doc_cfg.get("title_placeholder", "Document Title"))
-    run.font.size = Pt(float(headings["heading_1"].get("fontSize", 28)) + 4)
-    run.font.bold = True
-    run.font.name = headings["heading_1"].get("font", "Calibri")
-    run.font.color.rgb = RGBColor.from_string(
-        headings["heading_1"].get("color", "006600").upper()
-    )
     title.paragraph_format.space_after = Twips(120)
+    title._p.append(_text_run(
+        doc_cfg.get("title_placeholder", "Document Title"),
+        font_name=headings["heading_1"].get("font", "Calibri"),
+        size_pt=float(headings["heading_1"].get("fontSize", 28)) + 4,
+        color_hex=headings["heading_1"].get("color", "006600"),
+        bold=True,
+    ))
 
     subtitle = doc.add_paragraph()
     subtitle.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = subtitle.add_run(doc_cfg.get("subtitle_placeholder", "Subtitle"))
-    run.font.size = Pt(float(headings["heading_2"].get("fontSize", 20)) - 4)
-    run.font.name = headings["heading_2"].get("font", "Calibri")
-    run.font.color.rgb = RGBColor.from_string(
-        headings["heading_2"].get("color", "005200").upper()
-    )
     subtitle.paragraph_format.space_after = Twips(900)
+    subtitle._p.append(_text_run(
+        doc_cfg.get("subtitle_placeholder", "Subtitle"),
+        font_name=headings["heading_2"].get("font", "Calibri"),
+        size_pt=float(headings["heading_2"].get("fontSize", 20)) - 4,
+        color_hex=headings["heading_2"].get("color", "005200"),
+    ))
 
-    for line in (
-        doc_cfg.get("author_placeholder", "Author name"),
-        doc_cfg.get("date_placeholder", "Date"),
-        doc_cfg.get("reference_placeholder", "Document reference"),
-    ):
-        if not line:
+    line_fmt = {
+        "font_name": body.get("font", "Calibri"),
+        "size_pt": float(body.get("fontSize", 11)),
+    }
+    for key in ("author_placeholder", "date_placeholder",
+                "reference_placeholder"):
+        text = doc_cfg.get(key, "")
+        if not text:
             continue
         paragraph = doc.add_paragraph()
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-        run = paragraph.add_run(line)
-        run.font.size = Pt(float(body.get("fontSize", 11)))
-        run.font.name = body.get("font", "Calibri")
         paragraph.paragraph_format.space_after = Twips(60)
+        paragraph._p.append(_text_run(text, **line_fmt))
 
     doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
 
@@ -845,42 +973,112 @@ def _add_outline(doc, config):
         placeholder.style = doc.styles["Body Text"]
 
 
+def _slot_content(config, key, fmt):
+    """Return the run elements that render one field inside a header paragraph."""
+    field = (config.get("header_footer") or {}).get(key) or {}
+    if key == "page_number":
+        return _field_runs("PAGE", **fmt)
+    return [_text_run(field.get("text", ""), **fmt)]
+
+
+def _set_three_part_tabs(paragraph, section):
+    """
+    Give a header or footer paragraph a centre and a right tab stop.
+
+    This is how Word's own three part headers work: content starts at the left
+    margin, one tab jumps to the middle, a second to the right margin.
+    """
+    width = section.page_width - section.left_margin - section.right_margin
+    ppr = paragraph._p.get_or_add_pPr()
+    existing = ppr.find(qn("w:tabs"))
+    if existing is not None:
+        ppr.remove(existing)
+    tabs = OxmlElement("w:tabs")
+    for position, alignment in (
+        (int(Emu(int(width)).twips / 2), "center"),
+        (int(Emu(int(width)).twips), "right"),
+    ):
+        tab = OxmlElement("w:tab")
+        tab.set(qn("w:val"), alignment)
+        tab.set(qn("w:pos"), str(position))
+        tabs.append(tab)
+    ppr.append(tabs)
+
+
+def _fill_three_part(paragraph, section, config, assigned, area, fmt):
+    """
+    Lay out one header or footer: left content, tab, centre, tab, right.
+
+    The tabs are only emitted when something to their right needs them, so a
+    header holding nothing but a left hand field does not end in stray tabs.
+    """
+    keys = [assigned.get("%s_%s" % (area, side))
+            for side in ("left", "center", "right")]
+    if not any(keys):
+        return False
+
+    _set_three_part_tabs(paragraph, section)
+
+    # Clear whatever the starting template put here.
+    for child in list(paragraph._p):
+        if child.tag != qn("w:pPr"):
+            paragraph._p.remove(child)
+
+    left, center, right = keys
+    if left:
+        for element in _slot_content(config, left, fmt):
+            paragraph._p.append(element)
+    if center or right:
+        paragraph._p.append(_tab_run())
+    if center:
+        for element in _slot_content(config, center, fmt):
+            paragraph._p.append(element)
+    if right:
+        paragraph._p.append(_tab_run())
+        for element in _slot_content(config, right, fmt):
+            paragraph._p.append(element)
+    return True
+
+
 def _add_header_footer(doc, config):
-    """Add optional header text and a page number footer."""
-    doc_cfg = config.get("document", {})
+    """
+    Place the configured fields into the six header and footer positions.
+
+    Raises SlotConflict when two switched on fields want the same position.
+    """
+    header_footer = config.get("header_footer", {})
     section = doc.sections[0]
     body = config["styles"]["paragraph"]["body"]
     muted = config["styles"]["paragraph"]["caption"].get("color", "6B7280")
 
-    header_text = doc_cfg.get("header_text", "").strip()
-    if header_text:
-        paragraph = section.header.paragraphs[0]
-        paragraph.text = header_text
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-        for run in paragraph.runs:
-            run.font.size = Pt(9)
-            run.font.name = body.get("font", "Calibri")
-            run.font.color.rgb = RGBColor.from_string(muted.upper())
+    assigned = resolve_slots(config)
 
-    if not doc_cfg.get("page_numbers", True):
-        return
+    fmt = {
+        "font_name": body.get("font", "Calibri"),
+        "size_pt": 9,
+        "color_hex": muted,
+    }
 
-    paragraph = section.footer.paragraphs[0]
-    paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
-    run = paragraph.add_run()
-    run.font.size = Pt(9)
-    run.font.name = body.get("font", "Calibri")
-    run.font.color.rgb = RGBColor.from_string(muted.upper())
+    # Word calls this "Different first page". With a cover page it keeps the
+    # author and title out of the header on the page that already shows them
+    # in full.
+    section.different_first_page_header_footer = bool(
+        header_footer.get("different_first_page", True)
+    )
 
-    begin = OxmlElement("w:fldChar")
-    begin.set(qn("w:fldCharType"), "begin")
-    instr = OxmlElement("w:instrText")
-    instr.set(qn("xml:space"), "preserve")
-    instr.text = "PAGE"
-    end = OxmlElement("w:fldChar")
-    end.set(qn("w:fldCharType"), "end")
-    for element in (begin, instr, end):
-        run._r.append(element)
+    _fill_three_part(
+        section.header.paragraphs[0], section, config, assigned, "header", fmt
+    )
+    _fill_three_part(
+        section.footer.paragraphs[0], section, config, assigned, "footer", fmt
+    )
+
+    # The first page header and footer are separate parts. Leaving them
+    # untouched is what makes them blank.
+    if section.different_first_page_header_footer:
+        for container in (section.first_page_header, section.first_page_footer):
+            if container.paragraphs:
+                container.paragraphs[0].text = ""
 
 
 # ----------------------------------------------------------------------------

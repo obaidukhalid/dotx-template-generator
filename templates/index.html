@@ -92,6 +92,29 @@
     gap: 12px 16px; padding: 14px 16px 18px;
   }
 
+  /* A section with a fixed column count. Fields keep their order and land in
+     a true grid. Every label gets the same reserved height and sits at the
+     bottom of it, so the controls underneath all start on the same line
+     whether a label wraps or not. Help text hangs below the control, where it
+     cannot pull its cell out of line with the rest of the row. */
+  .grid.fixed { align-items: start; row-gap: 16px; }
+  .grid.fixed .field label {
+    display: flex; align-items: flex-end; min-height: 2.4em; margin: 0;
+  }
+  /* A text box, a dropdown and a toggle have three different intrinsic
+     heights. Pinning them to one value makes each row share a top and a
+     bottom edge rather than only a top. */
+  .grid.fixed .switch,
+  .grid.fixed input[type=text],
+  .grid.fixed select { height: 34px; }
+  .grid.fixed .switch { padding-top: 0; }
+  .grid.fixed .field .help { margin-top: 1px; }
+
+  @media (max-width: 760px) {
+    .grid.fixed { grid-template-columns: minmax(0, 1fr) !important; }
+    .grid.fixed .field label { min-height: 0; }
+  }
+
   .field { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
   .field label { font-size: 12px; font-weight: 600; color: var(--dark3); }
   .field .help { font-size: 11px; color: var(--muted); }
@@ -120,7 +143,10 @@
   .color-wrap input[type=text] { text-transform: uppercase; font-family: ui-monospace, Consolas, monospace; }
 
   .switch { display: flex; align-items: center; gap: 8px; padding-top: 3px; }
-  .switch input { appearance: none; width: 36px; height: 20px; border-radius: 10px;
+  /* margin:0 drops the browser's default checkbox margin, which otherwise
+     insets the toggle 4px and leaves it out of line with the text boxes and
+     dropdowns above and below it. */
+  .switch input { appearance: none; margin: 0; width: 36px; height: 20px; border-radius: 10px;
     background: var(--warm-gray); position: relative; cursor: pointer;
     transition: background .15s; flex: none; border: 1px solid var(--border); }
   .switch input:checked { background: var(--green); border-color: var(--green); }
@@ -220,6 +246,25 @@
     margin: 4px 0 8px; color: var(--muted); max-width: 70ch;
   }
 
+  /* header and footer strips in the preview */
+  .pv-strip {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    font-size: 9px; padding: 4px 0; gap: 6px;
+  }
+  .pv-strip span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pv-strip span:nth-child(2) { text-align: center; }
+  .pv-strip span:nth-child(3) { text-align: right; }
+  .pv-break {
+    display: flex; align-items: center; gap: 8px;
+    margin: 14px 0; font-size: 9px; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .5px;
+  }
+  .pv-break::before, .pv-break::after {
+    content: ''; flex: 1; border-top: 1px dashed var(--green-mid);
+  }
+  .pv-header { border-bottom: 1px solid var(--border); margin-bottom: 10px; }
+  .pv-footer { border-top: 1px solid var(--border); margin-top: 10px; }
+
   @media (max-width: 1180px) {
     .layout { grid-template-columns: 1fr; }
     nav, aside.preview { position: static; }
@@ -307,6 +352,60 @@ const normHex = v => {
   return /^[0-9A-F]{6}$/.test(v) ? v : null;
 };
 
+// ---------- header and footer positions ----------
+// Each slot select is registered here so they can all be rebuilt whenever a
+// position is claimed or released.
+let SLOT_SELECTS = [];
+
+// Mirrors PLACEABLE_KEYS in template_builder.py
+const PLACEABLE_KEYS = ['page_number', 'custom_1', 'custom_2', 'custom_3',
+                        'custom_4', 'custom_5', 'custom_6'];
+
+// The owning field key for a slot path, e.g. header_footer.author.slot -> author
+const slotFieldKey = path => path.split('.')[1];
+
+const fieldEnabled = key => !!getPath(CONFIG, `header_footer.${key}.enabled`);
+
+function takenSlots(exceptKey) {
+  const taken = {};
+  SLOT_SELECTS.forEach(({ field }) => {
+    const key = slotFieldKey(field.path);  // header_footer.<key>.slot
+    if (key === exceptKey || !fieldEnabled(key)) return;
+    const value = getPath(CONFIG, field.path);
+    if (value) taken[value] = key;
+  });
+  return taken;
+}
+
+function refreshSlotOptions() {
+  SLOT_SELECTS.forEach(({ select, field }) => {
+    const key = slotFieldKey(field.path);
+    const current = getPath(CONFIG, field.path) || '';
+    const taken = takenSlots(key);
+
+    select.innerHTML = '';
+    field.options.forEach(([value, label]) => {
+      // Keep "Not shown" and this field's own choice; drop the rest.
+      if (value && taken[value]) return;
+      const option = document.createElement('option');
+      option.value = value;
+      option.textContent = label;
+      if (value === current) option.selected = true;
+      select.appendChild(option);
+    });
+
+    // The saved position may have been taken while this field was switched
+    // off. Fall back to Not shown rather than showing a stale value.
+    if (current && taken[current]) {
+      setPath(CONFIG, field.path, '');
+      select.value = '';
+    }
+    select.disabled = !fieldEnabled(key);
+    select.title = select.disabled
+      ? 'Switch the field on to give it a position' : '';
+  });
+}
+
 // ---------- form building ----------
 function buildField(field) {
   const wrap = document.createElement('div');
@@ -324,7 +423,11 @@ function buildField(field) {
     const input = document.createElement('input');
     input.type = 'checkbox';
     input.checked = !!value;
-    input.onchange = () => { setPath(CONFIG, field.path, input.checked); refreshPreview(); };
+    input.onchange = () => {
+      setPath(CONFIG, field.path, input.checked);
+      if (field.path.startsWith('header_footer.')) refreshSlotOptions();
+      refreshPreview();
+    };
     const text = document.createElement('span');
     text.textContent = input.checked ? 'On' : 'Off';
     input.addEventListener('change', () => text.textContent = input.checked ? 'On' : 'Off');
@@ -350,6 +453,19 @@ function buildField(field) {
       select.insertBefore(option, select.firstChild);
     }
     select.onchange = () => { setPath(CONFIG, field.path, select.value); refreshPreview(); };
+    wrap.appendChild(select);
+
+  } else if (field.type === 'slot') {
+    // Six positions exist and each holds one field, so every slot select
+    // hides the positions other switched-on fields have already claimed.
+    const select = document.createElement('select');
+    select.dataset.slotPath = field.path;
+    SLOT_SELECTS.push({ select, field });
+    select.onchange = () => {
+      setPath(CONFIG, field.path, select.value);
+      refreshSlotOptions();
+      refreshPreview();
+    };
     wrap.appendChild(select);
 
   } else if (field.type === 'number') {
@@ -419,6 +535,7 @@ function renderForm() {
   const form = document.getElementById('form');
   const nav = document.getElementById('nav');
   form.innerHTML = ''; nav.innerHTML = '';
+  SLOT_SELECTS = [];
 
   SCHEMA.forEach(section => {
     const link = document.createElement('a');
@@ -442,11 +559,17 @@ function renderForm() {
 
     const grid = document.createElement('div');
     grid.className = 'grid';
+    if (section.columns) {
+      grid.classList.add('fixed');
+      grid.style.gridTemplateColumns =
+        `repeat(${section.columns}, minmax(0, 1fr))`;
+    }
     section.fields.forEach(field => grid.appendChild(buildField(field)));
     card.appendChild(grid);
     form.appendChild(card);
   });
 
+  refreshSlotOptions();
   setupScrollSpy();
 }
 
@@ -482,9 +605,70 @@ function styleString(spec, extra) {
   return parts.join(';') + (extra ? ';' + extra : '');
 }
 
+// Mirrors _slot_content in template_builder.py
+function slotText(key) {
+  const f = getPath(CONFIG, 'header_footer.' + key) || {};
+  return key === 'page_number' ? '1' : (f.text || '');
+}
+
+function slotStrip(area) {
+  const hf = CONFIG.header_footer || {};
+  const keys = PLACEABLE_KEYS;
+  const cells = { left: '', center: '', right: '' };
+  let used = false;
+
+  keys.forEach(key => {
+    const f = hf[key] || {};
+    if (!f.enabled || !f.slot) return;
+    const [slotArea, side] = [f.slot.split('_')[0], f.slot.split('_')[1]];
+    if (slotArea !== area) return;
+    cells[side] = escapeHtml(slotText(key));
+    used = true;
+  });
+
+  if (!used) return '';
+  const muted = CONFIG.styles.paragraph.caption.color || '6B7280';
+  const font = CONFIG.styles.paragraph.body.font || 'Calibri';
+  return `<div class="pv-strip pv-${area}" style="font-family:'${font}',sans-serif;color:#${muted}">
+    <span>${cells.left}</span><span>${cells.center}</span><span>${cells.right}</span></div>`;
+}
+
+// The cover page, drawn the way _add_cover builds it: a big centred title,
+// a smaller subtitle, then the three placeholder lines.
+function coverPage() {
+  const d = CONFIG.document || {};
+  if (!d.include_cover) return '';
+  const h = CONFIG.styles.headings, b = CONFIG.styles.paragraph.body;
+  const out = [];
+
+  out.push(`<div style="${styleString({
+    font: h.heading_1.font, fontSize: Number(h.heading_1.fontSize) + 4,
+    bold: true, color: h.heading_1.color,
+    spacing_before: 700, spacing_after: 120
+  })};text-align:center">${escapeHtml(d.title_placeholder || '')}</div>`);
+
+  out.push(`<div style="${styleString({
+    font: h.heading_2.font, fontSize: Math.max(6, Number(h.heading_2.fontSize) - 4),
+    color: h.heading_2.color, spacing_before: 0, spacing_after: 560
+  })};text-align:center">${escapeHtml(d.subtitle_placeholder || '')}</div>`);
+
+  [d.author_placeholder, d.date_placeholder, d.reference_placeholder]
+    .filter(Boolean)
+    .forEach(line => out.push(`<div style="${styleString({
+      font: b.font, fontSize: b.fontSize, color: b.color,
+      spacing_before: 0, spacing_after: 60
+    })};text-align:center">${escapeHtml(line)}</div>`));
+
+  return out.join('') +
+    `<div class="pv-break"><span>page break</span></div>`;
+}
+
 function refreshPreview() {
   const s = CONFIG.styles, h = s.headings, b = s.paragraph.body;
   const out = [];
+
+  out.push(slotStrip('header'));
+  out.push(coverPage());
 
   const toc = s.toc;
   out.push(`<div style="${styleString({
@@ -525,6 +709,8 @@ function refreshPreview() {
     const q = s.paragraph.quote;
     out.push(`<div style="${styleString(q, `padding-left:${(q.indent * TW).toFixed(1)}px;border-left:2px solid #c8ddd0`)}">Quote block text</div>`);
   }
+
+  out.push(slotStrip('footer'));
 
   document.getElementById('preview').innerHTML = out.join('');
 }
